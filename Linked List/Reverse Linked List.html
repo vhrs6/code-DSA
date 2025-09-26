@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Execution Visualizer (Canvas Renderer)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Ensure canvas is responsive and doesn't have default margins */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .font-fira {
+            font-family: 'Fira Code', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .btn-control {
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        .btn-control:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-full flex flex-col">
+
+    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
+        <!-- Header -->
+        <header class="text-center mb-6 flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
+            <p class="text-gray-400 mt-2">Visualizing `reverseList` in Python (Canvas Renderer)</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                 <label for="custom-input" class="font-medium text-white flex-shrink-0">Enter list nodes (comma-separated):</label>
+                 <input type="text" id="custom-input" placeholder="1,2,3,4,5" class="flex-grow bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 <button id="visualize-btn" class="btn-control bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg w-full sm:w-auto">
+                     Visualize
+                 </button>
+            </div>
+             <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
+        </div>
+
+        <!-- Canvas Container: This will now grow and shrink correctly -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
+            <canvas id="visualizer-canvas"></canvas>
+        </main>
+
+        <!-- Controls -->
+        <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
+            <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="step-counter" class="text-lg font-medium text-gray-400 w-28 text-center tabular-nums">Step 0 / 0</span>
+            <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </footer>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Element References ---
+        const customInput = document.getElementById('custom-input');
+        const visualizeBtn = document.getElementById('visualize-btn');
+        const errorBox = document.getElementById('error-box');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const stepCounter = document.getElementById('step-counter');
+        const canvas = document.getElementById('visualizer-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Source Code ---
+        const sourceCode = [
+            'class Solution(object):',
+            '    def reverseList(self, head):',
+            '        prev = None',
+            '        curr = head',
+            '        while curr:',
+            '            temp = curr.next',
+            '            curr.next = prev',
+            '            prev = curr',
+            '            curr = temp',
+            '        return prev',
+        ];
+
+        // --- Global State ---
+        let executionTrace = [];
+        let currentStep = -1;
+        
+        // --- Canvas & Drawing Configuration ---
+        const config = {
+            padding: 30,
+            codeFontSize: 16,
+            uiFontSize: 15,
+            titleFontSize: 18,
+            lineHeight: 1.6,
+            codePanelWidthRatio: 0.55,
+            colors: {
+                bg: '#111827',
+                text: '#d1d5db',
+                title: '#ffffff',
+                highlightBg: '#374151',
+                highlightAccent: '#3b82f6',
+                varName: '#fb923c',
+                varValue: '#facc15',
+                returnValue: '#4ade80',
+                nodeBg: '#1f2937',
+                nodeBorder: '#4b5563',
+                nodeText: '#e5e7eb',
+                prevPointerStroke: '#10b981', // green-500
+                currPointerStroke: '#ef4444', // red-500
+                tempPointerStroke: '#f59e0b', // amber-500
+                arrow: '#6b7280',
+            }
+        };
+        
+        const formatNodeVal = (nodes, id) => id === null ? 'None' : `${nodes.find(n => n.id === id).val}`;
+
+        // --- Core Logic: Trace Generation for reverseList ---
+        function generateTrace(nums) {
+            if (nums.length === 0) {
+                return [{ line: 2, vars: { 'prev': 'None', 'curr': 'None' }, nodes: [], headId: null, prevId: null, currId: null, tempId: null, msg: 'Function called with an empty list.', returnValue: 'None' }];
+            }
+
+            const steps = [];
+            const nodes = nums.map((val, index) => ({
+                id: index,
+                val,
+                next: index < nums.length - 1 ? index + 1 : null
+            }));
+
+            let headId = 0;
+            let prevId = null;
+            let currId = headId;
+            let tempId = null;
+
+            const addStep = (line, msg, extra = {}) => {
+                steps.push({ 
+                    line, 
+                    vars: { 
+                        'prev (points to)': formatNodeVal(nodes, prevId),
+                        'curr (points to)': formatNodeVal(nodes, currId),
+                        'temp (points to)': formatNodeVal(nodes, tempId),
+                    },
+                    nodes: JSON.parse(JSON.stringify(nodes)),
+                    headId,
+                    prevId,
+                    currId,
+                    tempId,
+                    msg, 
+                    ...extra 
+                });
+            };
+
+            addStep(2, `Function 'reverseList' is called.`);
+            addStep(3, `Initialize 'prev' to None. It will store the head of the new reversed list.`);
+            addStep(4, `Initialize 'curr' to the head of the list (${formatNodeVal(nodes, headId)}).`);
+            
+            while (currId !== null) {
+                const currNode = nodes.find(n => n.id === currId);
+                addStep(5, `Check loop: 'curr' is not None. Condition is true.`);
+                
+                tempId = currNode.next;
+                addStep(6, `Store the next node in 'temp'. temp now points to ${formatNodeVal(nodes, tempId)}.`);
+                
+                currNode.next = prevId;
+                addStep(7, `Reverse the pointer: 'curr.next' now points to 'prev' (${formatNodeVal(nodes, prevId)}).`);
+                
+                prevId = currId;
+                addStep(8, `Move 'prev' forward. 'prev' now points to ${formatNodeVal(nodes, prevId)}.`);
+                
+                currId = tempId;
+                addStep(9, `Move 'curr' forward. 'curr' now points to ${formatNodeVal(nodes, currId)}.`);
+            }
+            addStep(5, `Check loop: 'curr' is None. Exiting loop.`);
+            addStep(10, `Return 'prev', which is the new head of the reversed list.`, { returnValue: formatNodeVal(nodes, prevId) });
+            
+            return steps;
+        }
+
+        // --- Canvas Drawing Functions ---
+        function wrapText(text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        // FIX: Corrected function signature to match the arguments passed to it.
+        function drawLinkedList(nodes, headId, pointers, x, y) {
+            if (nodes.length === 0) return;
+
+            const nodeSize = 40;
+            const nodeSpacing = 60;
+            let currentX = x;
+            const nodePositions = {};
+
+            nodes.forEach(node => {
+                nodePositions[node.id] = { x: currentX, y };
+                
+                ctx.fillStyle = config.colors.nodeBg;
+                ctx.strokeStyle = config.colors.nodeBorder;
+                ctx.lineWidth = 1;
+                
+                ctx.beginPath();
+                ctx.roundRect(currentX, y, nodeSize, nodeSize, 8);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = config.colors.nodeText;
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(node.val, currentX + nodeSize / 2, y + nodeSize / 2);
+                
+                currentX += nodeSpacing;
+            });
+
+            nodes.forEach(node => {
+                if (node.next !== null) {
+                    const startPos = nodePositions[node.id];
+                    const endPos = nodePositions[node.next];
+
+                    if (startPos && endPos) {
+                        ctx.strokeStyle = config.colors.arrow;
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        // Draw curved arrow for reversed pointers
+                        if (startPos.x > endPos.x) {
+                             ctx.moveTo(startPos.x, y + nodeSize / 2);
+                             ctx.bezierCurveTo(startPos.x, y - 20, endPos.x + nodeSize, y - 20, endPos.x + nodeSize, y + nodeSize/2);
+                        } else {
+                            ctx.moveTo(startPos.x + nodeSize, y + nodeSize / 2);
+                            ctx.lineTo(endPos.x, y + nodeSize / 2);
+                        }
+                        ctx.stroke();
+
+                        // Arrowhead
+                        ctx.fillStyle = config.colors.arrow;
+                        ctx.beginPath();
+                        if (startPos.x > endPos.x) {
+                            ctx.moveTo(endPos.x + nodeSize, y + nodeSize / 2);
+                            ctx.lineTo(endPos.x + nodeSize - 5, y + nodeSize / 2 - 8);
+                            ctx.lineTo(endPos.x + nodeSize + 5, y + nodeSize / 2 - 8);
+                        } else {
+                            ctx.moveTo(endPos.x, y + nodeSize / 2);
+                            ctx.lineTo(endPos.x - 8, y + nodeSize / 2 - 5);
+                            ctx.lineTo(endPos.x - 8, y + nodeSize / 2 + 5);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                }
+            });
+            
+            // Draw pointer labels
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.textAlign = 'center';
+            for (const pointer of pointers) {
+                if (pointer.id !== null && nodePositions[pointer.id]) {
+                    ctx.fillStyle = pointer.color;
+                    ctx.fillText(pointer.name, nodePositions[pointer.id].x + nodeSize / 2, y + pointer.yOffset);
+                } else if (pointer.id === null) {
+                    ctx.fillStyle = pointer.color;
+                    ctx.fillText(`${pointer.name} (None)`, x - 40, y + pointer.yOffset);
+                }
+            }
+        }
+
+        function draw() {
+            if (currentStep < 0 || currentStep >= executionTrace.length) return;
+            
+            const state = executionTrace[currentStep];
+            const codeLineHeight = config.codeFontSize * config.lineHeight;
+            const uiLineHeight = config.uiFontSize * config.lineHeight;
+
+            ctx.fillStyle = config.colors.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- Draw Code Panel (Left) ---
+            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Source Code", config.padding, config.padding);
+
+            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
+            sourceCode.forEach((line, index) => {
+                const y = config.padding + 50 + index * codeLineHeight;
+                if (index + 2 === state.line) {
+                    ctx.fillStyle = config.colors.highlightBg;
+                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
+                    ctx.fillStyle = config.colors.highlightAccent;
+                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
+                }
+                ctx.fillStyle = config.colors.text;
+                ctx.fillText(line, config.padding, y);
+            });
+
+            // --- Draw State Panel (Right) ---
+            const statePanelX = codePanelWidth + config.padding;
+            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
+            let currentY = config.padding;
+
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText("Execution State", statePanelX, currentY);
+            currentY += 50;
+            
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Linked List", statePanelX, currentY);
+            currentY += uiLineHeight + 20;
+            const pointers = [
+                { name: 'prev', id: state.prevId, color: config.colors.prevPointerStroke, yOffset: -20 },
+                { name: 'curr', id: state.currId, color: config.colors.currPointerStroke, yOffset: 65 },
+                { name: 'temp', id: state.tempId, color: config.colors.tempPointerStroke, yOffset: 85 }
+            ];
+            drawLinkedList(state.nodes, state.headId, pointers, statePanelX, currentY);
+            currentY += 100;
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Variables", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
+            for (const [key, value] of Object.entries(state.vars)) {
+                 if (value === undefined) continue;
+                
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText(`${key}`, statePanelX, currentY);
+                
+                ctx.fillStyle = config.colors.varValue;
+                ctx.textAlign = "right";
+                ctx.fillText(value, statePanelX + statePanelWidth - 20, currentY);
+                ctx.textAlign = "left";
+                currentY += uiLineHeight;
+            }
+            currentY += config.padding;
+
+            if (state.returnValue !== undefined) {
+                ctx.font = `bold ${config.uiFontSize}px Inter`;
+                ctx.fillStyle = config.colors.title;
+                ctx.fillText("Return Value", statePanelX, currentY);
+                currentY += uiLineHeight;
+                
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.fillStyle = config.colors.returnValue;
+                ctx.fillText(state.returnValue, statePanelX, currentY);
+                currentY += uiLineHeight + config.padding;
+            }
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Explanation", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.text;
+            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
+        }
+
+        function render() {
+            draw();
+            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+            prevBtn.disabled = currentStep === 0;
+            nextBtn.disabled = currentStep === executionTrace.length - 1;
+        }
+        
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.opacity = '1';
+            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+        }
+
+        // --- Event Handlers & Setup ---
+        function setupVisualizer() {
+            const inputStr = customInput.value.trim();
+            if (!inputStr) {
+                showError("Input cannot be empty.");
+                return;
+            }
+            try {
+                const nums = inputStr.split(',').map(s => {
+                    const num = Number(s.trim());
+                    if (isNaN(num)) throw new Error(`Invalid number: "${s.trim()}"`);
+                    return num;
+                });
+                
+                executionTrace = generateTrace(nums);
+                currentStep = 0;
+                render();
+            } catch (e) {
+                showError(e.message || "Invalid input format.");
+            }
+        }
+
+        function handleResize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            if (executionTrace.length > 0) {
+                draw();
+            }
+        }
+
+        // --- Initial Load & Event Listeners ---
+        function initialize() {
+            customInput.value = '1,2,3,4,5';
+            handleResize();
+            setupVisualizer();
+
+            visualizeBtn.addEventListener('click', setupVisualizer);
+            nextBtn.addEventListener('click', () => {
+                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+            });
+            prevBtn.addEventListener('click', () => {
+                if (currentStep > 0) { currentStep--; render(); }
+            });
+            window.addEventListener('resize', handleResize);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') nextBtn.click();
+                else if (e.key === 'ArrowLeft') prevBtn.click();
+            });
+        }
+        
+        window.setTimeout(initialize, 100);
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Execution Visualizer (Canvas Renderer)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Ensure canvas is responsive and doesn't have default margins */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .font-fira {
+            font-family: 'Fira Code', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .btn-control {
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        .btn-control:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-screen flex flex-col">
+
+    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
+        <!-- Header -->
+        <header class="text-center mb-6 flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
+            <p class="text-gray-400 mt-2">Visualizing `isSubsequence` in Python (Canvas Renderer)</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                 <div class="flex-grow w-full">
+                    <label for="s-input" class="text-sm font-medium text-gray-400">Subsequence (s):</label>
+                    <input type="text" id="s-input" placeholder="ace" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <div class="flex-grow w-full">
+                    <label for="t-input" class="text-sm font-medium text-gray-400">String (t):</label>
+                    <input type="text" id="t-input" placeholder="abcde" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <button id="visualize-btn" class="btn-control bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg w-full sm:w-auto sm:self-end">
+                     Visualize
+                 </button>
+            </div>
+             <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
+        </div>
+
+        <!-- Canvas Container: This will now grow and shrink correctly -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
+            <canvas id="visualizer-canvas"></canvas>
+        </main>
+
+        <!-- Controls -->
+        <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
+            <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="step-counter" class="text-lg font-medium text-gray-400 w-28 text-center tabular-nums">Step 0 / 0</span>
+            <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </footer>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Element References ---
+        const sInput = document.getElementById('s-input');
+        const tInput = document.getElementById('t-input');
+        const visualizeBtn = document.getElementById('visualize-btn');
+        const errorBox = document.getElementById('error-box');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const stepCounter = document.getElementById('step-counter');
+        const canvas = document.getElementById('visualizer-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Source Code ---
+        const sourceCode = [
+            'class Solution:',
+            '    def isSubsequence(self, s: str, t: str) -> bool:',
+            '        s_pnt = 0',
+            '        t_pnt = 0',
+            '        while s_pnt < len(s) and t_pnt < len(t):',
+            '            if s[s_pnt] == t[t_pnt]:',
+            '                s_pnt += 1',
+            '            t_pnt += 1',
+            '        return len(s) == s_pnt',
+        ];
+
+        // --- Global State ---
+        let executionTrace = [];
+        let currentStep = -1;
+        let lastVarsState = {};
+        
+        // --- Canvas & Drawing Configuration ---
+        const config = {
+            padding: 30,
+            codeFontSize: 16,
+            uiFontSize: 15,
+            titleFontSize: 18,
+            lineHeight: 1.6,
+            codePanelWidthRatio: 0.6,
+            colors: {
+                bg: '#111827',
+                text: '#d1d5db',
+                title: '#ffffff',
+                highlightBg: '#374151',
+                highlightAccent: '#3b82f6',
+                varName: '#fb923c',
+                varValue: '#facc15',
+                returnValue: '#4ade80',
+                flash: 'rgba(29, 78, 216, 0.7)',
+            }
+        };
+
+        // --- Core Logic: Trace Generation for isSubsequence ---
+        function generateTrace(s, t) {
+            const steps = [];
+            let s_pnt, t_pnt;
+
+            const addStep = (line, msg, extra = {}) => {
+                steps.push({ line, vars: { s: `"${s}"`, t: `"${t}"`, s_pnt, t_pnt }, msg, ...extra });
+            };
+
+            addStep(2, `Function 'isSubsequence' is called with s="${s}" and t="${t}".`);
+            s_pnt = 0;
+            addStep(3, `Initialize subsequence pointer 's_pnt' to 0.`);
+            t_pnt = 0;
+            addStep(4, `Initialize main string pointer 't_pnt' to 0.`);
+
+            while (s_pnt < s.length && t_pnt < t.length) {
+                addStep(5, `Check loop condition: s_pnt < len(s) (${s_pnt} < ${s.length}) AND t_pnt < len(t) (${t_pnt} < ${t.length}). Condition is ${s_pnt < s.length && t_pnt < t.length}.`);
+                if (!(s_pnt < s.length && t_pnt < t.length)) break;
+
+                const match = s[s_pnt] === t[t_pnt];
+                addStep(6, `Check if characters match: s[${s_pnt}] ('${s[s_pnt]}') == t[${t_pnt}] ('${t[t_pnt]}'). Condition is ${match}.`);
+                if (match) {
+                    s_pnt++;
+                    addStep(7, `Characters match. Increment 's_pnt' to ${s_pnt} to look for the next character in the subsequence.`);
+                }
+                t_pnt++;
+                addStep(8, `Increment 't_pnt' to ${t_pnt} to check the next character in the main string.`);
+            }
+            addStep(5, `Loop condition is false. Exiting loop.`);
+
+            const finalResult = s.length === s_pnt;
+            addStep(9, `Return the result of len(s) == s_pnt (${s.length} == ${s_pnt}), which is ${finalResult}.`, { returnValue: finalResult });
+            return steps;
+        }
+
+        // --- Canvas Drawing Functions ---
+        function wrapText(text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        function draw() {
+            if (currentStep < 0 || currentStep >= executionTrace.length) return;
+            
+            const state = executionTrace[currentStep];
+            const codeLineHeight = config.codeFontSize * config.lineHeight;
+            const uiLineHeight = config.uiFontSize * config.lineHeight;
+
+            ctx.fillStyle = config.colors.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- Draw Code Panel (Left) ---
+            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Source Code", config.padding, config.padding);
+
+            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
+            sourceCode.forEach((line, index) => {
+                const y = config.padding + 50 + index * codeLineHeight;
+                if (index + 2 === state.line) { // Offset by 2 for class/def
+                    ctx.fillStyle = config.colors.highlightBg;
+                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
+                    ctx.fillStyle = config.colors.highlightAccent;
+                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
+                }
+                ctx.fillStyle = config.colors.text;
+                ctx.fillText(line, config.padding, y);
+            });
+
+            // --- Draw State Panel (Right) ---
+            const statePanelX = codePanelWidth + config.padding;
+            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
+            let currentY = config.padding;
+
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Execution State", statePanelX, currentY);
+            currentY += 50;
+            
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Variables", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
+            for (const [key, value] of Object.entries(state.vars)) {
+                 if (value === undefined) continue;
+                
+                if (lastVarsState[key] !== undefined && JSON.stringify(lastVarsState[key]) !== JSON.stringify(value)) {
+                    ctx.fillStyle = config.colors.flash;
+                    ctx.fillRect(statePanelX - 10, currentY - uiLineHeight / 1.5, statePanelWidth, uiLineHeight);
+                }
+
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText(`${key}`, statePanelX, currentY);
+                
+                ctx.fillStyle = config.colors.varValue;
+                ctx.textAlign = "right";
+                ctx.fillText(value, statePanelX + statePanelWidth - 20, currentY);
+                ctx.textAlign = "left";
+                currentY += uiLineHeight;
+            }
+            currentY += config.padding;
+
+            if (state.returnValue !== undefined) {
+                ctx.font = `bold ${config.uiFontSize}px Inter`;
+                ctx.fillStyle = config.colors.title;
+                ctx.fillText("Return Value", statePanelX, currentY);
+                currentY += uiLineHeight;
+                
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.fillStyle = config.colors.returnValue;
+                ctx.fillText(state.returnValue, statePanelX, currentY);
+                currentY += uiLineHeight + config.padding;
+            }
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Explanation", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.text;
+            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
+        }
+
+        function render() {
+            draw();
+            lastVarsState = JSON.parse(JSON.stringify(executionTrace[currentStep].vars));
+            
+            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+            prevBtn.disabled = currentStep === 0;
+            nextBtn.disabled = currentStep === executionTrace.length - 1;
+        }
+        
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.opacity = '1';
+            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+        }
+
+        // --- Event Handlers & Setup ---
+        function setupVisualizer() {
+            const s = sInput.value;
+            const t = tInput.value;
+            
+            executionTrace = generateTrace(s, t);
+            currentStep = 0;
+            render();
+        }
+
+        function handleResize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            if (executionTrace.length > 0) {
+                draw();
+            }
+        }
+
+        // --- Initial Load & Event Listeners ---
+        function initialize() {
+            sInput.value = 'ace';
+            tInput.value = 'abcde';
+            handleResize();
+            setupVisualizer();
+
+            visualizeBtn.addEventListener('click', setupVisualizer);
+            nextBtn.addEventListener('click', () => {
+                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+            });
+            prevBtn.addEventListener('click', () => {
+                if (currentStep > 0) { currentStep--; render(); }
+            });
+            window.addEventListener('resize', handleResize);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') nextBtn.click();
+                else if (e.key === 'ArrowLeft') prevBtn.click();
+            });
+        }
+        
+        window.setTimeout(initialize, 100);
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Execution Visualizer (Canvas Renderer)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Ensure canvas is responsive and doesn't have default margins */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .font-fira {
+            font-family: 'Fira Code', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .btn-control {
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        .btn-control:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-full flex flex-col">
+
+    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
+        <!-- Header -->
+        <header class="text-center mb-6 flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
+            <p class="text-gray-400 mt-2">Visualizing `numIslands` in Python (Canvas Renderer)</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                 <div class="flex-grow w-full">
+                    <label for="custom-input" class="text-sm font-medium text-gray-400">Grid (e.g., [["1","0"],["0","1"]]):</label>
+                    <input type="text" id="custom-input" placeholder='[["1","1","0"],["1","1","0"],["0","0","1"]]' class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <button id="visualize-btn" class="btn-control bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg w-full sm:w-auto sm:self-end">
+                     Visualize
+                 </button>
+            </div>
+             <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
+        </div>
+
+        <!-- Canvas Container -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
+            <canvas id="visualizer-canvas"></canvas>
+        </main>
+
+        <!-- Controls -->
+        <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
+            <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="step-counter" class="text-lg font-medium text-gray-400 w-28 text-center tabular-nums">Step 0 / 0</span>
+            <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </footer>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Element References ---
+        const customInput = document.getElementById('custom-input');
+        const visualizeBtn = document.getElementById('visualize-btn');
+        const errorBox = document.getElementById('error-box');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const stepCounter = document.getElementById('step-counter');
+        const canvas = document.getElementById('visualizer-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Source Code ---
+        const sourceCode = [
+            'class Solution:',
+            '    def numIslands(self, grid):',
+            '        islands=0',
+            '        m,n=len(grid),len(grid[0])',
+            '        def dfs(i,j):',
+            "            if i<0 or j<0 or i>=m or j>=n or grid[i][j]!='1':",
+            '                return',
+            '            else:',
+            "                grid[i][j]='0' # Mark as visited",
+            '                dfs(i,j+1)',
+            '                dfs(i,j-1)',
+            '                dfs(i+1,j)',
+            '                dfs(i-1,j)',
+            '',
+            '        for i in range(m):',
+            '            for j in range(n):',
+            "                if grid[i][j]=='1':",
+            '                    islands+=1',
+            '                    dfs(i,j)',
+            '        return islands',
+        ];
+
+        // --- Global State ---
+        let executionTrace = [];
+        let currentStep = -1;
+        
+        // --- Canvas & Drawing Configuration ---
+        const config = {
+            padding: 30,
+            codeFontSize: 16,
+            uiFontSize: 15,
+            titleFontSize: 18,
+            lineHeight: 1.6,
+            codePanelWidthRatio: 0.55,
+            colors: {
+                bg: '#111827',
+                text: '#d1d5db',
+                title: '#ffffff',
+                highlightBg: '#374151',
+                highlightAccent: '#3b82f6',
+                varName: '#fb923c',
+                varValue: '#facc15',
+                returnValue: '#4ade80',
+                water: '#1f2937',
+                land: '#10b981',
+                visited: '#6b7280',
+                currentCell: '#f59e0b',
+            }
+        };
+        
+        const formatGrid = grid => `[${grid.map(row => `['${row.join("','")}']`).join(', ')}]`;
+
+        // --- Core Logic: Trace Generation for numIslands ---
+        function generateTrace(grid) {
+            const steps = [];
+            let islands, m, n, i, j;
+            let gridState = JSON.parse(JSON.stringify(grid)); // Deep copy
+
+            const addStep = (line, msg, extra = {}) => {
+                steps.push({ 
+                    line, 
+                    vars: { 
+                        islands, m, n, i, j,
+                        grid: formatGrid(gridState),
+                    },
+                    gridState: JSON.parse(JSON.stringify(gridState)),
+                    currentCell: (i !== undefined && j !== undefined) ? [i, j] : null,
+                    msg, 
+                    ...extra 
+                });
+            };
+
+            const dfs = (r, c) => {
+                addStep(5, `Entering DFS for cell (${r}, ${c}).`);
+                if (r < 0 || c < 0 || r >= m || c >= n || gridState[r][c] !== '1') {
+                    addStep(6, `Base case met for (${r}, ${c}). Returning.`);
+                    addStep(7, `Return from DFS.`);
+                    return;
+                }
+                
+                addStep(8, `Cell (${r}, ${c}) is land.`);
+                gridState[r][c] = '0'; // Mark as visited
+                addStep(9, `Marking cell (${r}, ${c}) as visited.`);
+                
+                dfs(r, c + 1); // Right
+                addStep(10, `Calling DFS for right neighbor.`);
+                dfs(r, c - 1); // Left
+                addStep(11, `Calling DFS for left neighbor.`);
+                dfs(r + 1, c); // Down
+                addStep(12, `Calling DFS for bottom neighbor.`);
+                dfs(r - 1, c); // Up
+                addStep(13, `Calling DFS for top neighbor.`);
+            };
+
+            addStep(2, `Function 'numIslands' is called.`);
+            islands = 0;
+            addStep(3, `Initialize 'islands' count to 0.`);
+            m = gridState.length;
+            n = gridState[0].length;
+            addStep(4, `Set dimensions: m=${m}, n=${n}.`);
+
+            addStep(15, "Start iterating through the grid to find islands.");
+            for (let r = 0; r < m; r++) {
+                i = r;
+                addStep(15, `Outer loop: current row 'i' is ${i}.`);
+                for (let c = 0; c < n; c++) {
+                    j = c;
+                    addStep(16, `Inner loop: current column 'j' is ${j}.`);
+                    
+                    addStep(17, `Check if grid[${i}][${j}] is '1'. Value is '${gridState[i][j]}'.`);
+                    if (gridState[i][j] === '1') {
+                        islands++;
+                        addStep(18, `Found unvisited land. Increment 'islands' to ${islands}.`);
+                        addStep(19, `Start DFS from (${i}, ${j}) to find all connected land.`);
+                        dfs(i, j);
+                        addStep(19, `Finished DFS for the current island.`);
+                    }
+                }
+            }
+            i = undefined; j = undefined;
+            addStep(15, "Finished iterating through the grid.");
+            addStep(20, `Return the total number of islands found.`, { returnValue: islands });
+            
+            return steps;
+        }
+
+        // --- Canvas Drawing Functions ---
+        function wrapText(text, x, y, maxWidth, lineHeight) {
+            const words = String(text).split(' ');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        function drawGrid(state, x, y, panelWidth) {
+            const { gridState, currentCell } = state;
+            if (!gridState || gridState.length === 0) return;
+
+            const m = gridState.length;
+            const n = gridState[0].length;
+            const boxSize = Math.min(30, (panelWidth - 40) / n);
+            const spacing = 5;
+            const totalWidth = n * (boxSize + spacing) - spacing;
+            const totalHeight = m * (boxSize + spacing) - spacing;
+            let startX = x + (panelWidth - totalWidth) / 2;
+            let startY = y + (150 - totalHeight) / 2; // Center vertically
+
+            ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i < m; i++) {
+                for (let j = 0; j < n; j++) {
+                    const boxX = startX + j * (boxSize + spacing);
+                    const boxY = startY + i * (boxSize + spacing);
+                    
+                    if (gridState[i][j] === '1') {
+                        ctx.fillStyle = config.colors.land;
+                    } else {
+                        // Using '0' as visited, but could be another char
+                        ctx.fillStyle = config.colors.water;
+                    }
+
+                    ctx.beginPath();
+                    ctx.roundRect(boxX, boxY, boxSize, boxSize, 5);
+                    ctx.fill();
+
+                    if (currentCell && currentCell[0] === i && currentCell[1] === j) {
+                        ctx.strokeStyle = config.colors.currentCell;
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            if (currentStep < 0 || currentStep >= executionTrace.length) return;
+            
+            const state = executionTrace[currentStep];
+            const codeLineHeight = config.codeFontSize * config.lineHeight;
+            const uiLineHeight = config.uiFontSize * config.lineHeight;
+
+            ctx.fillStyle = config.colors.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- Draw Code Panel (Left) ---
+            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Source Code", config.padding, config.padding);
+
+            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
+            sourceCode.forEach((line, index) => {
+                const y = config.padding + 50 + index * codeLineHeight;
+                if (index + 2 === state.line) {
+                    ctx.fillStyle = config.colors.highlightBg;
+                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
+                    ctx.fillStyle = config.colors.highlightAccent;
+                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
+                }
+                ctx.fillStyle = config.colors.text;
+                ctx.fillText(line, config.padding, y);
+            });
+
+            // --- Draw State Panel (Right) ---
+            const statePanelX = codePanelWidth + config.padding;
+            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
+            let currentY = config.padding;
+
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText("Execution State", statePanelX, currentY);
+            currentY += 50;
+            
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Grid", statePanelX, currentY);
+            currentY += uiLineHeight;
+            drawGrid(state, statePanelX, currentY, statePanelWidth);
+            currentY += 150;
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Variables", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
+            for (const [key, value] of Object.entries(state.vars)) {
+                 if (value === undefined || key === 'grid') continue;
+                
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText(`${key}`, statePanelX, currentY);
+                
+                ctx.fillStyle = config.colors.varValue;
+                ctx.textAlign = "right";
+                ctx.fillText(value, statePanelX + statePanelWidth - 20, currentY);
+                ctx.textAlign = "left";
+                currentY += uiLineHeight;
+            }
+            currentY += config.padding;
+
+            if (state.returnValue !== undefined) {
+                ctx.font = `bold ${config.uiFontSize}px Inter`;
+                ctx.fillStyle = config.colors.title;
+                ctx.fillText("Return Value", statePanelX, currentY);
+                currentY += uiLineHeight;
+                
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.fillStyle = config.colors.returnValue;
+                ctx.fillText(state.returnValue, statePanelX, currentY);
+                currentY += uiLineHeight + config.padding;
+            }
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Explanation", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.text;
+            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
+        }
+
+        function render() {
+            draw();
+            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+            prevBtn.disabled = currentStep === 0;
+            nextBtn.disabled = currentStep === executionTrace.length - 1;
+        }
+        
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.opacity = '1';
+            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+        }
+
+        // --- Event Handlers & Setup ---
+        function setupVisualizer() {
+            const inputStr = customInput.value.trim();
+            if (!inputStr) {
+                showError("Input cannot be empty.");
+                return;
+            }
+            try {
+                const grid = JSON.parse(inputStr.replace(/'/g, '"'));
+                if (!Array.isArray(grid) || !grid.every(Array.isArray) || grid.length === 0 || grid[0].length === 0) {
+                    throw new Error("Input must be a non-empty matrix.");
+                }
+                
+                executionTrace = generateTrace(grid);
+                currentStep = 0;
+                render();
+            } catch (e) {
+                showError(e.message || "Invalid input format. Use [[\"1\"],[\"0\"]].");
+            }
+        }
+
+        function handleResize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            if (executionTrace.length > 0) {
+                draw();
+            }
+        }
+
+        // --- Initial Load & Event Listeners ---
+        function initialize() {
+            customInput.value = '[["1","1","0"],["1","1","0"],["0","0","1"]]';
+            handleResize();
+            setupVisualizer();
+
+            visualizeBtn.addEventListener('click', setupVisualizer);
+            nextBtn.addEventListener('click', () => {
+                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+            });
+            prevBtn.addEventListener('click', () => {
+                if (currentStep > 0) { currentStep--; render(); }
+            });
+            window.addEventListener('resize', handleResize);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') nextBtn.click();
+                else if (e.key === 'ArrowLeft') prevBtn.click();
+            });
+        }
+        
+        window.setTimeout(initialize, 100);
+    });
+</script>
+
+</body>
+</html>

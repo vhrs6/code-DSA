@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Execution Visualizer (Canvas Renderer)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Ensure canvas is responsive and doesn't have default margins */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .font-fira {
+            font-family: 'Fira Code', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .btn-control {
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        .btn-control:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-full flex flex-col">
+
+    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
+        <!-- Header -->
+        <header class="text-center mb-6 flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
+            <p class="text-gray-400 mt-2">Visualizing `searchMatrix` in Python (Canvas Renderer)</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                 <div class="flex-grow w-full">
+                    <label for="matrix-input" class="text-sm font-medium text-gray-400">Matrix (e.g., [[1,3],[5,7]]):</label>
+                    <input type="text" id="matrix-input" placeholder="[[1,3,5,7],[10,11,16,20],[23,30,34,60]]" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <div class="flex-grow-0 w-full sm:w-auto">
+                    <label for="target-input" class="text-sm font-medium text-gray-400">Target:</label>
+                    <input type="text" id="target-input" placeholder="3" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <button id="visualize-btn" class="btn-control bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg w-full sm:w-auto sm:self-end">
+                     Visualize
+                 </button>
+            </div>
+             <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
+        </div>
+
+        <!-- Canvas Container: This will now grow and shrink correctly -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
+            <canvas id="visualizer-canvas"></canvas>
+        </main>
+
+        <!-- Controls -->
+        <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
+            <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="step-counter" class="text-lg font-medium text-gray-400 w-28 text-center tabular-nums">Step 0 / 0</span>
+            <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </footer>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Element References ---
+        const matrixInput = document.getElementById('matrix-input');
+        const targetInput = document.getElementById('target-input');
+        const visualizeBtn = document.getElementById('visualize-btn');
+        const errorBox = document.getElementById('error-box');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const stepCounter = document.getElementById('step-counter');
+        const canvas = document.getElementById('visualizer-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Source Code ---
+        const sourceCode = [
+            'class Solution:',
+            '    def searchMatrix(self, matrix, target):',
+            '        m = len(matrix)',
+            '        n = len(matrix[0])',
+            '        t = m * n',
+            '        l = 0',
+            '        r = t - 1',
+            '',
+            '        while l <= r:',
+            '            mid = (l + r) // 2',
+            '            mid_i = mid // n',
+            '            mid_j = mid % n',
+            '            mid_num = matrix[mid_i][mid_j]',
+            '',
+            '            if target == mid_num:',
+            '                return True',
+            '            elif target < mid_num:',
+            '                r = mid - 1',
+            '            else:',
+            '                l = mid + 1',
+            '',
+            '        return False',
+        ];
+
+        // --- Global State ---
+        let executionTrace = [];
+        let currentStep = -1;
+        
+        // --- Canvas & Drawing Configuration ---
+        const config = {
+            padding: 30,
+            codeFontSize: 16,
+            uiFontSize: 15,
+            titleFontSize: 18,
+            lineHeight: 1.6,
+            codePanelWidthRatio: 0.55,
+            colors: {
+                bg: '#111827',
+                text: '#d1d5db',
+                title: '#ffffff',
+                highlightBg: '#374151',
+                highlightAccent: '#3b82f6',
+                varName: '#fb923c',
+                varValue: '#facc15',
+                returnValue: '#4ade80',
+                searchRange: 'rgba(59, 130, 246, 0.2)',
+                midpoint: '#f59e0b',
+                arrayBox: '#374151',
+                arrayText: '#e5e7eb',
+            }
+        };
+        
+        const formatMatrix = matrix => `[${matrix.map(row => `[${row.join(',')}]`).join(', ')}]`;
+
+        // --- Core Logic: Trace Generation for searchMatrix ---
+        function generateTrace(matrix, target) {
+            const steps = [];
+            let m, n, t, l, r, mid, mid_i, mid_j, mid_num;
+
+            const addStep = (line, msg, extra = {}) => {
+                steps.push({ 
+                    line, 
+                    vars: { matrix: formatMatrix(matrix), target, m, n, t, l, r, mid, mid_i, mid_j, mid_num },
+                    msg, 
+                    ...extra 
+                });
+            };
+
+            addStep(2, `Function 'searchMatrix' is called.`);
+            
+            m = matrix.length;
+            addStep(3, `Get number of rows 'm' = ${m}.`);
+            
+            n = matrix[0].length;
+            addStep(4, `Get number of columns 'n' = ${n}.`);
+            
+            t = m * n;
+            addStep(5, `Calculate total elements 't' = ${m} * ${n} = ${t}.`);
+            
+            l = 0;
+            addStep(6, `Initialize left pointer 'l' to 0.`);
+            
+            r = t - 1;
+            addStep(7, `Initialize right pointer 'r' to ${r}.`);
+            
+            while (l <= r) {
+                addStep(9, `Check loop condition: l <= r (${l} <= ${r}). Condition is true.`);
+                
+                mid = Math.floor((l + r) / 2);
+                addStep(10, `Calculate flat midpoint 'mid' = floor((${l} + ${r}) / 2) = ${mid}.`);
+                
+                mid_i = Math.floor(mid / n);
+                addStep(11, `Calculate row index 'mid_i' = mid // n = ${mid} // ${n} = ${mid_i}.`);
+                
+                mid_j = mid % n;
+                addStep(12, `Calculate column index 'mid_j' = mid % n = ${mid} % ${n} = ${mid_j}.`);
+                
+                mid_num = matrix[mid_i][mid_j];
+                addStep(13, `Get value at matrix[${mid_i}][${mid_j}], which is ${mid_num}.`);
+                
+                addStep(15, `Check if target == mid_num (${target} == ${mid_num}).`);
+                if (target === mid_num) {
+                    addStep(16, `Target found. Return True.`, { returnValue: true });
+                    return steps;
+                }
+                
+                addStep(17, `Check if target < mid_num (${target} < ${mid_num}).`);
+                if (target < mid_num) {
+                    r = mid - 1;
+                    addStep(18, `Target is smaller. Move 'r' to mid - 1 (${r}).`);
+                } else {
+                    addStep(19, `Target is larger.`);
+                    l = mid + 1;
+                    addStep(20, `Move 'l' to mid + 1 (${l}).`);
+                }
+            }
+            addStep(9, `Check loop condition: l <= r (${l} <= ${r}). Condition is false. Exiting loop.`);
+            addStep(22, `Target not found in the matrix. Return False.`, { returnValue: false });
+            
+            return steps;
+        }
+
+        // --- Canvas Drawing Functions ---
+        function wrapText(text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        function drawMatrix(state, x, y, panelWidth) {
+            const { matrix, l, r, mid, n } = state.vars;
+            const matrixArr = JSON.parse(matrix.replace(/\[/g, '[ ').replace(/\]/g, ' ]').replace(/,/g, ', ').replace(/\s+/g, ' ').replace(/, /g, ','));
+            
+            const boxSize = 40;
+            const spacing = 10;
+            const totalWidth = n * (boxSize + spacing) - spacing;
+            let startX = x + (panelWidth - totalWidth) / 2;
+            let startY = y;
+
+            ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i < matrixArr.length; i++) {
+                for (let j = 0; j < matrixArr[i].length; j++) {
+                    const flatIndex = i * n + j;
+                    const boxX = startX + j * (boxSize + spacing);
+                    const boxY = startY + i * (boxSize + spacing);
+                    
+                    if (flatIndex >= l && flatIndex <= r) {
+                        ctx.fillStyle = config.colors.searchRange;
+                        ctx.fillRect(boxX - spacing/2, boxY - spacing/2, boxSize + spacing, boxSize + spacing);
+                    }
+
+                    ctx.fillStyle = config.colors.arrayBox;
+                    ctx.beginPath();
+                    ctx.roundRect(boxX, boxY, boxSize, boxSize, 5);
+                    ctx.fill();
+
+                    if (flatIndex === mid) {
+                        ctx.strokeStyle = config.colors.midpoint;
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                    }
+
+                    ctx.fillStyle = config.colors.arrayText;
+                    ctx.fillText(matrixArr[i][j], boxX + boxSize / 2, boxY + boxSize / 2);
+                }
+            }
+        }
+
+        function draw() {
+            if (currentStep < 0 || currentStep >= executionTrace.length) return;
+            
+            const state = executionTrace[currentStep];
+            const codeLineHeight = config.codeFontSize * config.lineHeight;
+            const uiLineHeight = config.uiFontSize * config.lineHeight;
+
+            ctx.fillStyle = config.colors.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- Draw Code Panel (Left) ---
+            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Source Code", config.padding, config.padding);
+
+            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
+            sourceCode.forEach((line, index) => {
+                const y = config.padding + 50 + index * codeLineHeight;
+                if (index + 2 === state.line) {
+                    ctx.fillStyle = config.colors.highlightBg;
+                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
+                    ctx.fillStyle = config.colors.highlightAccent;
+                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
+                }
+                ctx.fillStyle = config.colors.text;
+                ctx.fillText(line, config.padding, y);
+            });
+
+            // --- Draw State Panel (Right) ---
+            const statePanelX = codePanelWidth + config.padding;
+            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
+            let currentY = config.padding;
+
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText("Execution State", statePanelX, currentY);
+            currentY += 50;
+            
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Matrix", statePanelX, currentY);
+            currentY += uiLineHeight + 20;
+            drawMatrix(state, statePanelX, currentY, statePanelWidth);
+            currentY += (state.vars.m || 1) * 50 + 40;
+
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Variables", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
+            for (const [key, value] of Object.entries(state.vars)) {
+                 if (value === undefined || key === 'matrix') continue;
+                
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText(`${key}`, statePanelX, currentY);
+                
+                ctx.fillStyle = config.colors.varValue;
+                ctx.textAlign = "right";
+                ctx.fillText(value, statePanelX + statePanelWidth - 20, currentY);
+                ctx.textAlign = "left";
+                currentY += uiLineHeight;
+            }
+            currentY += config.padding;
+
+            if (state.returnValue !== undefined) {
+                ctx.font = `bold ${config.uiFontSize}px Inter`;
+                ctx.fillStyle = config.colors.title;
+                ctx.fillText("Return Value", statePanelX, currentY);
+                currentY += uiLineHeight;
+                
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.fillStyle = config.colors.returnValue;
+                ctx.fillText(state.returnValue, statePanelX, currentY);
+                currentY += uiLineHeight + config.padding;
+            }
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Explanation", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.text;
+            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
+        }
+
+        function render() {
+            draw();
+            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+            prevBtn.disabled = currentStep === 0;
+            nextBtn.disabled = currentStep === executionTrace.length - 1;
+        }
+        
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.opacity = '1';
+            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+        }
+
+        // --- Event Handlers & Setup ---
+        function setupVisualizer() {
+            const matrixStr = matrixInput.value.trim();
+            const targetStr = targetInput.value.trim();
+            if (!matrixStr || !targetStr) {
+                showError("Both inputs are required.");
+                return;
+            }
+            try {
+                const matrix = JSON.parse(matrixStr.replace(/'/g, '"'));
+                if (!Array.isArray(matrix) || !matrix.every(Array.isArray) || matrix.length === 0 || matrix[0].length === 0) {
+                    throw new Error("Input must be a non-empty matrix.");
+                }
+                const target = Number(targetStr);
+                if (isNaN(target)) throw new Error("Target must be a number.");
+                
+                executionTrace = generateTrace(matrix, target);
+                currentStep = 0;
+                render();
+            } catch (e) {
+                showError(e.message || "Invalid input format. Use [[1,2],[3,4]]");
+            }
+        }
+
+        function handleResize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            if (executionTrace.length > 0) {
+                draw();
+            }
+        }
+
+        // --- Initial Load & Event Listeners ---
+        function initialize() {
+            matrixInput.value = '[[1,3,5,7],[10,11,16,20],[23,30,34,60]]';
+            targetInput.value = '3';
+            handleResize();
+            setupVisualizer();
+
+            visualizeBtn.addEventListener('click', setupVisualizer);
+            nextBtn.addEventListener('click', () => {
+                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+            });
+            prevBtn.addEventListener('click', () => {
+                if (currentStep > 0) { currentStep--; render(); }
+            });
+            window.addEventListener('resize', handleResize);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') nextBtn.click();
+                else if (e.key === 'ArrowLeft') prevBtn.click();
+            });
+        }
+        
+        window.setTimeout(initialize, 100);
+    });
+</script>
+
+</body>
+</html>

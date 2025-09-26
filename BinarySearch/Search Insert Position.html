@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Execution Visualizer (Canvas Renderer)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Ensure canvas is responsive and doesn't have default margins */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .font-fira {
+            font-family: 'Fira Code', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .btn-control {
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        .btn-control:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-full flex flex-col">
+
+    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
+        <!-- Header -->
+        <header class="text-center mb-6 flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
+            <p class="text-gray-400 mt-2">Visualizing `searchInsert` in Python (Canvas Renderer)</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                 <div class="flex-grow w-full">
+                    <label for="nums-input" class="text-sm font-medium text-gray-400">Numbers (nums, sorted):</label>
+                    <input type="text" id="nums-input" placeholder="1,3,5,6" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <div class="flex-grow-0 w-full sm:w-auto">
+                    <label for="target-input" class="text-sm font-medium text-gray-400">Target:</label>
+                    <input type="text" id="target-input" placeholder="5" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <button id="visualize-btn" class="btn-control bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg w-full sm:w-auto sm:self-end">
+                     Visualize
+                 </button>
+            </div>
+             <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
+        </div>
+
+        <!-- Canvas Container: This will now grow and shrink correctly -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
+            <canvas id="visualizer-canvas"></canvas>
+        </main>
+
+        <!-- Controls -->
+        <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
+            <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="step-counter" class="text-lg font-medium text-gray-400 w-28 text-center tabular-nums">Step 0 / 0</span>
+            <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </footer>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Element References ---
+        const numsInput = document.getElementById('nums-input');
+        const targetInput = document.getElementById('target-input');
+        const visualizeBtn = document.getElementById('visualize-btn');
+        const errorBox = document.getElementById('error-box');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const stepCounter = document.getElementById('step-counter');
+        const canvas = document.getElementById('visualizer-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Source Code ---
+        const sourceCode = [
+            'class Solution(object):',
+            '    def searchInsert(self, nums, target):',
+            '        low = 0',
+            '        high = len(nums) - 1',
+            '',
+            '        while low <= high:',
+            '            mid = (low + high) // 2',
+            '            if nums[mid] == target:',
+            '                return mid',
+            '            elif nums[mid] < target:',
+            '                low = mid + 1',
+            '            else:',
+            '                high = mid - 1',
+            '',
+            '        return low',
+        ];
+
+        // --- Global State ---
+        let executionTrace = [];
+        let currentStep = -1;
+        
+        // --- Canvas & Drawing Configuration ---
+        const config = {
+            padding: 30,
+            codeFontSize: 16,
+            uiFontSize: 15,
+            titleFontSize: 18,
+            lineHeight: 1.6,
+            codePanelWidthRatio: 0.55,
+            colors: {
+                bg: '#111827',
+                text: '#d1d5db',
+                title: '#ffffff',
+                highlightBg: '#374151',
+                highlightAccent: '#3b82f6',
+                varName: '#fb923c',
+                varValue: '#facc15',
+                returnValue: '#4ade80',
+                searchRange: 'rgba(59, 130, 246, 0.2)',
+                midpoint: '#f59e0b',
+                arrayBox: '#374151',
+                arrayText: '#e5e7eb',
+            }
+        };
+        
+        const formatArr = arr => `[${arr.join(', ')}]`;
+
+        // --- Core Logic: Trace Generation for searchInsert ---
+        function generateTrace(nums, target) {
+            const steps = [];
+            let low, high, mid;
+
+            const addStep = (line, msg, extra = {}) => {
+                steps.push({ 
+                    line, 
+                    vars: { nums: formatArr(nums), target, low, high, mid },
+                    msg, 
+                    ...extra 
+                });
+            };
+
+            addStep(2, `Function 'searchInsert' is called.`);
+            
+            low = 0;
+            addStep(3, `Initialize 'low' pointer to 0.`);
+            
+            high = nums.length - 1;
+            addStep(4, `Initialize 'high' pointer to ${high}.`);
+            
+            while (low <= high) {
+                addStep(6, `Check loop condition: low <= high (${low} <= ${high}). Condition is true.`);
+                
+                mid = Math.floor((low + high) / 2);
+                addStep(7, `Calculate 'mid' = floor((${low} + ${high}) / 2) = ${mid}.`);
+                
+                const midVal = nums[mid];
+                addStep(8, `Check if nums[mid] == target (${midVal} == ${target}).`);
+                
+                if (midVal === target) {
+                    addStep(9, `Target found at index ${mid}. Return mid.`, { returnValue: mid });
+                    return steps;
+                }
+                
+                addStep(10, `Check if nums[mid] < target (${midVal} < ${target}).`);
+                if (midVal < target) {
+                    low = mid + 1;
+                    addStep(11, `Midpoint value is less than target. Move 'low' to mid + 1 (${low}).`);
+                } else {
+                    addStep(12, `Midpoint value is greater than target.`);
+                    high = mid - 1;
+                    addStep(13, `Move 'high' to mid - 1 (${high}).`);
+                }
+            }
+            addStep(6, `Check loop condition: low <= high (${low} <= ${high}). Condition is false. Exiting loop.`);
+            addStep(15, `Target not found. The insertion point is at 'low' (${low}). Return low.`, { returnValue: low });
+            
+            return steps;
+        }
+
+        // --- Canvas Drawing Functions ---
+        function wrapText(text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        function drawArrayBar(state, x, y, panelWidth) {
+            const { nums, low, high, mid } = state.vars;
+            const numsArr = JSON.parse(nums);
+            const boxSize = 40;
+            const spacing = 10;
+            const totalWidth = numsArr.length * (boxSize + spacing) - spacing;
+            let startX = x + (panelWidth - totalWidth) / 2;
+
+            ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i < numsArr.length; i++) {
+                const boxX = startX + i * (boxSize + spacing);
+                
+                // Highlight search range
+                if (i >= low && i <= high) {
+                    ctx.fillStyle = config.colors.searchRange;
+                    ctx.fillRect(boxX - spacing/2, y - boxSize/2, boxSize + spacing, boxSize * 2.5);
+                }
+
+                ctx.fillStyle = config.colors.arrayBox;
+                ctx.beginPath();
+                ctx.roundRect(boxX, y, boxSize, boxSize, 5);
+                ctx.fill();
+
+                if (i === mid) {
+                    ctx.strokeStyle = config.colors.midpoint;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = config.colors.arrayText;
+                ctx.fillText(numsArr[i], boxX + boxSize / 2, y + boxSize / 2);
+            }
+            
+            // Draw pointer labels
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            if (low !== undefined && low < numsArr.length) {
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText("low", startX + low * (boxSize + spacing) + boxSize / 2, y + boxSize + 15);
+            }
+            if (high !== undefined && high >= 0) {
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText("high", startX + high * (boxSize + spacing) + boxSize / 2, y + boxSize + 15);
+            }
+             if (mid !== undefined) {
+                ctx.fillStyle = config.colors.midpoint;
+                ctx.fillText("mid", startX + mid * (boxSize + spacing) + boxSize / 2, y - 15);
+            }
+        }
+
+        function draw() {
+            if (currentStep < 0 || currentStep >= executionTrace.length) return;
+            
+            const state = executionTrace[currentStep];
+            const codeLineHeight = config.codeFontSize * config.lineHeight;
+            const uiLineHeight = config.uiFontSize * config.lineHeight;
+
+            ctx.fillStyle = config.colors.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- Draw Code Panel (Left) ---
+            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Source Code", config.padding, config.padding);
+
+            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
+            sourceCode.forEach((line, index) => {
+                const y = config.padding + 50 + index * codeLineHeight;
+                if (index + 2 === state.line) {
+                    ctx.fillStyle = config.colors.highlightBg;
+                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
+                    ctx.fillStyle = config.colors.highlightAccent;
+                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
+                }
+                ctx.fillStyle = config.colors.text;
+                ctx.fillText(line, config.padding, y);
+            });
+
+            // --- Draw State Panel (Right) ---
+            const statePanelX = codePanelWidth + config.padding;
+            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
+            let currentY = config.padding;
+
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText("Execution State", statePanelX, currentY);
+            currentY += 50;
+            
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Array", statePanelX, currentY);
+            currentY += uiLineHeight + 20;
+            drawArrayBar(state, statePanelX, currentY, statePanelWidth);
+            currentY += 80;
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Variables", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
+            for (const [key, value] of Object.entries(state.vars)) {
+                 if (value === undefined) continue;
+                
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText(`${key}`, statePanelX, currentY);
+                
+                ctx.fillStyle = config.colors.varValue;
+                ctx.textAlign = "right";
+                ctx.fillText(value, statePanelX + statePanelWidth - 20, currentY);
+                ctx.textAlign = "left";
+                currentY += uiLineHeight;
+            }
+            currentY += config.padding;
+
+            if (state.returnValue !== undefined) {
+                ctx.font = `bold ${config.uiFontSize}px Inter`;
+                ctx.fillStyle = config.colors.title;
+                ctx.fillText("Return Value", statePanelX, currentY);
+                currentY += uiLineHeight;
+                
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.fillStyle = config.colors.returnValue;
+                ctx.fillText(state.returnValue, statePanelX, currentY);
+                currentY += uiLineHeight + config.padding;
+            }
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Explanation", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.text;
+            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
+        }
+
+        function render() {
+            draw();
+            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+            prevBtn.disabled = currentStep === 0;
+            nextBtn.disabled = currentStep === executionTrace.length - 1;
+        }
+        
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.opacity = '1';
+            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+        }
+
+        // --- Event Handlers & Setup ---
+        function setupVisualizer() {
+            const numsStr = numsInput.value.trim();
+            const targetStr = targetInput.value.trim();
+            if (!numsStr || !targetStr) {
+                showError("Both inputs are required.");
+                return;
+            }
+            try {
+                const nums = numsStr.split(',').map(s => {
+                    const num = Number(s.trim());
+                    if (isNaN(num)) throw new Error(`Invalid number in list: "${s.trim()}"`);
+                    return num;
+                });
+                const target = Number(targetStr);
+                if (isNaN(target)) throw new Error("Target must be a number.");
+                
+                executionTrace = generateTrace(nums, target);
+                currentStep = 0;
+                render();
+            } catch (e) {
+                showError(e.message || "Invalid input format.");
+            }
+        }
+
+        function handleResize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            if (executionTrace.length > 0) {
+                draw();
+            }
+        }
+
+        // --- Initial Load & Event Listeners ---
+        function initialize() {
+            numsInput.value = '1,3,5,6';
+            targetInput.value = '5';
+            handleResize();
+            setupVisualizer();
+
+            visualizeBtn.addEventListener('click', setupVisualizer);
+            nextBtn.addEventListener('click', () => {
+                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+            });
+            prevBtn.addEventListener('click', () => {
+                if (currentStep > 0) { currentStep--; render(); }
+            });
+            window.addEventListener('resize', handleResize);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') nextBtn.click();
+                else if (e.key === 'ArrowLeft') prevBtn.click();
+            });
+        }
+        
+        window.setTimeout(initialize, 100);
+    });
+</script>
+
+</body>
+</html>

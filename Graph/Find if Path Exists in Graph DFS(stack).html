@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Execution Visualizer (Canvas Renderer)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Ensure canvas is responsive and doesn't have default margins */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .font-fira {
+            font-family: 'Fira Code', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .btn-control {
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+        .btn-control:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-full flex flex-col">
+
+    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
+    <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
+        <!-- Header -->
+        <header class="text-center mb-6 flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
+            <p class="text-gray-400 mt-2">Visualizing `validPath` in Python (Canvas Renderer)</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                 <div class="flex-grow w-full">
+                    <label for="n-input" class="text-sm font-medium text-gray-400">Nodes (n):</label>
+                    <input type="text" id="n-input" placeholder="3" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <div class="flex-grow w-full">
+                    <label for="edges-input" class="text-sm font-medium text-gray-400">Edges:</label>
+                    <input type="text" id="edges-input" placeholder="[[0,1],[1,2],[2,0]]" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <div class="flex-grow-0 w-full sm:w-auto">
+                    <label for="source-input" class="text-sm font-medium text-gray-400">Source:</label>
+                    <input type="text" id="source-input" placeholder="0" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <div class="flex-grow-0 w-full sm:w-auto">
+                    <label for="dest-input" class="text-sm font-medium text-gray-400">Destination:</label>
+                    <input type="text" id="dest-input" placeholder="2" class="w-full mt-1 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                 </div>
+                 <button id="visualize-btn" class="btn-control bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg w-full sm:w-auto sm:self-end">
+                     Visualize
+                 </button>
+            </div>
+             <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
+        </div>
+
+        <!-- Canvas Container -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
+            <canvas id="visualizer-canvas"></canvas>
+        </main>
+
+        <!-- Controls -->
+        <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
+            <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="step-counter" class="text-lg font-medium text-gray-400 w-28 text-center tabular-nums">Step 0 / 0</span>
+            <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </footer>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Element References ---
+        const nInput = document.getElementById('n-input');
+        const edgesInput = document.getElementById('edges-input');
+        const sourceInput = document.getElementById('source-input');
+        const destInput = document.getElementById('dest-input');
+        const visualizeBtn = document.getElementById('visualize-btn');
+        const errorBox = document.getElementById('error-box');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const stepCounter = document.getElementById('step-counter');
+        const canvas = document.getElementById('visualizer-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Source Code ---
+        const sourceCode = [
+            'class Solution(object):',
+            '    def validPath(self, n, edges, source, destination):',
+            '        graph=defaultdict(list)',
+            '        sett=set()',
+            '        stack=[]',
+            '',
+            '        for u,v in edges:',
+            '            graph[u].append(v)',
+            '            graph[v].append(u)',
+            '',
+            '        stack.append(source)',
+            '        while stack:',
+            '            node=stack.pop()',
+            '            if node==destination:',
+            '                return True',
+            '            for nei_node in graph[node]:',
+            '                if nei_node not in sett:',
+            '                    sett.add(nei_node)',
+            '                    stack.append(nei_node)',
+            '        return False',
+        ];
+
+        // --- Global State ---
+        let executionTrace = [];
+        let currentStep = -1;
+        
+        // --- Canvas & Drawing Configuration ---
+        const config = {
+            padding: 30,
+            codeFontSize: 16,
+            uiFontSize: 15,
+            titleFontSize: 18,
+            lineHeight: 1.6,
+            codePanelWidthRatio: 0.55,
+            colors: {
+                bg: '#111827',
+                text: '#d1d5db',
+                title: '#ffffff',
+                highlightBg: '#374151',
+                highlightAccent: '#3b82f6',
+                varName: '#fb923c',
+                varValue: '#facc15',
+                returnValue: '#4ade80',
+                nodeBg: '#1f2937',
+                nodeBorder: '#4b5563',
+                nodeText: '#e5e7eb',
+                sourceNode: '#10b981', // green-500
+                destNode: '#ef4444', // red-500
+                currentNode: '#f59e0b', // amber-500
+                visitedNode: '#6b7280', // gray-500
+                stackNode: 'rgba(59, 130, 246, 0.5)', // blue-500
+                edge: '#4b5563',
+            }
+        };
+        
+        const formatDict = dict => `{${Object.entries(dict).map(([k,v]) => `${k}: [${v.join(',')}]`).join(', ')}}`;
+        const formatSet = set => `{${Array.from(set).join(', ')}}`;
+        const formatArr = arr => `[${arr.join(', ')}]`;
+
+        // --- Core Logic: Trace Generation for validPath ---
+        function generateTrace(n, edges, source, destination) {
+            const steps = [];
+            let graph, sett, stack, node, nei_node;
+
+            const addStep = (line, msg, extra = {}) => {
+                steps.push({ 
+                    line, 
+                    vars: { n, source, destination, 
+                        graph: graph ? formatDict(graph) : '{}',
+                        sett: sett ? formatSet(sett) : '{}',
+                        stack: stack ? formatArr(stack) : '[]',
+                        node, nei_node
+                    },
+                    graphState: { // For visual rendering
+                        nodes: Array.from({length: n}, (_, i) => i),
+                        edges,
+                        visited: sett ? new Set(sett) : new Set(),
+                        stack: stack ? [...stack] : [],
+                        current: node,
+                        source, destination
+                    },
+                    msg, 
+                    ...extra 
+                });
+            };
+
+            addStep(2, `Function 'validPath' is called.`);
+            graph = {};
+            for(let i=0; i<n; i++) graph[i] = [];
+            addStep(3, `Initialize 'graph' as a defaultdict.`);
+            sett = new Set();
+            addStep(4, `Initialize 'sett' as an empty set for visited nodes.`);
+            stack = [];
+            addStep(5, `Initialize 'stack' for DFS traversal.`);
+            
+            addStep(7, "Start building the adjacency list from 'edges'.");
+            for(const [u,v] of edges) {
+                graph[u].push(v);
+                graph[v].push(u);
+                addStep(8, `Adding edge between ${u} and ${v}.`);
+                addStep(9, `Graph is now updated.`);
+            }
+            
+            stack.push(source);
+            sett.add(source);
+            addStep(11, `Push the 'source' node (${source}) onto the stack and mark as visited.`);
+            
+            while (stack.length > 0) {
+                addStep(12, `Check loop: stack is not empty. Condition is true.`);
+                node = stack.pop();
+                addStep(13, `Pop a node from the stack. 'node' is now ${node}.`);
+                
+                addStep(14, `Check if node == destination (${node} == ${destination}).`);
+                if (node === destination) {
+                    addStep(15, `Destination reached. Return True.`, { returnValue: true });
+                    return steps;
+                }
+                
+                addStep(16, `Iterate through neighbors of node ${node}: [${graph[node].join(', ')}].`);
+                for (const neighbor of graph[node]) {
+                    nei_node = neighbor;
+                    addStep(16, `Current neighbor 'nei_node' is ${nei_node}.`);
+                    
+                    addStep(17, `Check if neighbor ${nei_node} has been visited (is in 'sett'). Result is ${!sett.has(nei_node)}.`);
+                    if (!sett.has(nei_node)) {
+                        sett.add(nei_node);
+                        addStep(18, `Neighbor ${nei_node} not visited. Add it to 'sett'.`);
+                        stack.push(nei_node);
+                        addStep(19, `Push neighbor ${nei_node} onto the stack.`);
+                    }
+                }
+            }
+            node = undefined;
+            nei_node = undefined;
+            addStep(12, `Check loop: stack is empty. Exiting loop.`);
+            addStep(20, `Path not found. Return False.`, { returnValue: false });
+            
+            return steps;
+        }
+
+        // --- Canvas Drawing Functions ---
+        function wrapText(text, x, y, maxWidth, lineHeight) {
+            const words = String(text).split(' '); // FIX: Ensure text is a string before splitting
+            let line = '';
+            for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        function drawGraph(state, x, y, panelWidth) {
+            const { nodes, edges, visited, stack, current, source, destination } = state.graphState;
+            if (nodes.length === 0) return;
+
+            const radius = Math.min(panelWidth / 2 - 40, 120);
+            const centerX = x + panelWidth / 2;
+            const centerY = y + radius + 20;
+            const nodeSize = 15;
+            const nodePositions = {};
+
+            // Calculate node positions in a circle
+            nodes.forEach((nodeId, index) => {
+                const angle = (index / nodes.length) * 2 * Math.PI - Math.PI / 2;
+                nodePositions[nodeId] = {
+                    x: centerX + radius * Math.cos(angle),
+                    y: centerY + radius * Math.sin(angle)
+                };
+            });
+
+            // Draw edges
+            ctx.strokeStyle = config.colors.edge;
+            ctx.lineWidth = 1;
+            edges.forEach(([u, v]) => {
+                const posU = nodePositions[u];
+                const posV = nodePositions[v];
+                ctx.beginPath();
+                ctx.moveTo(posU.x, posU.y);
+                ctx.lineTo(posV.x, posV.y);
+                ctx.stroke();
+            });
+
+            // Draw nodes
+            nodes.forEach(nodeId => {
+                const pos = nodePositions[nodeId];
+                
+                if (nodeId === source) ctx.fillStyle = config.colors.sourceNode;
+                else if (nodeId === destination) ctx.fillStyle = config.colors.destNode;
+                else if (nodeId === current) ctx.fillStyle = config.colors.currentNode;
+                else if (stack.includes(nodeId)) ctx.fillStyle = config.colors.stackNode;
+                else if (visited.has(nodeId)) ctx.fillStyle = config.colors.visitedNode;
+                else ctx.fillStyle = config.colors.nodeBg;
+
+                ctx.strokeStyle = config.colors.nodeBorder;
+                ctx.lineWidth = 1;
+                
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, nodeSize, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = config.colors.nodeText;
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(nodeId, pos.x, pos.y);
+            });
+        }
+
+        function draw() {
+            if (currentStep < 0 || currentStep >= executionTrace.length) return;
+            
+            const state = executionTrace[currentStep];
+            const codeLineHeight = config.codeFontSize * config.lineHeight;
+            const uiLineHeight = config.uiFontSize * config.lineHeight;
+
+            ctx.fillStyle = config.colors.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- Draw Code Panel (Left) ---
+            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Source Code", config.padding, config.padding);
+
+            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
+            sourceCode.forEach((line, index) => {
+                const y = config.padding + 50 + index * codeLineHeight;
+                if (index + 2 === state.line) {
+                    ctx.fillStyle = config.colors.highlightBg;
+                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
+                    ctx.fillStyle = config.colors.highlightAccent;
+                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
+                }
+                ctx.fillStyle = config.colors.text;
+                ctx.fillText(line, config.padding, y);
+            });
+
+            // --- Draw State Panel (Right) ---
+            const statePanelX = codePanelWidth + config.padding;
+            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
+            let currentY = config.padding;
+
+            ctx.font = `bold ${config.titleFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText("Execution State", statePanelX, currentY);
+            currentY += 50;
+            
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Graph", statePanelX, currentY);
+            currentY += uiLineHeight;
+            drawGraph(state, statePanelX, currentY, statePanelWidth);
+            currentY += 2 * 120 + 60; // Approximate graph height
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Variables", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
+            for (const [key, value] of Object.entries(state.vars)) {
+                 if (value === undefined) continue;
+                
+                ctx.fillStyle = config.colors.varName;
+                ctx.fillText(`${key}`, statePanelX, currentY);
+                
+                ctx.fillStyle = config.colors.varValue;
+                ctx.textAlign = "right";
+                // FIX: Use fillText for variable values, ensuring they are strings.
+                ctx.fillText(String(value), statePanelX + statePanelWidth - 20, currentY);
+                ctx.textAlign = "left";
+                currentY += uiLineHeight;
+            }
+            currentY += config.padding;
+
+            if (state.returnValue !== undefined) {
+                ctx.font = `bold ${config.uiFontSize}px Inter`;
+                ctx.fillStyle = config.colors.title;
+                ctx.fillText("Return Value", statePanelX, currentY);
+                currentY += uiLineHeight;
+                
+                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
+                ctx.fillStyle = config.colors.returnValue;
+                ctx.fillText(state.returnValue, statePanelX, currentY);
+                currentY += uiLineHeight + config.padding;
+            }
+
+            ctx.font = `bold ${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.title;
+            ctx.fillText("Explanation", statePanelX, currentY);
+            currentY += uiLineHeight;
+
+            ctx.font = `${config.uiFontSize}px Inter`;
+            ctx.fillStyle = config.colors.text;
+            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
+        }
+
+        function render() {
+            draw();
+            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+            prevBtn.disabled = currentStep === 0;
+            nextBtn.disabled = currentStep === executionTrace.length - 1;
+        }
+        
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.style.opacity = '1';
+            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+        }
+
+        // --- Event Handlers & Setup ---
+        function setupVisualizer() {
+            const nStr = nInput.value.trim();
+            const edgesStr = edgesInput.value.trim();
+            const sourceStr = sourceInput.value.trim();
+            const destStr = destInput.value.trim();
+
+            if (!nStr || !edgesStr || !sourceStr || !destStr) {
+                showError("All inputs are required.");
+                return;
+            }
+            try {
+                const n = Number(nStr);
+                if (isNaN(n) || n <= 0) throw new Error("'n' must be a positive integer.");
+                
+                const edges = JSON.parse(edgesStr.replace(/'/g, '"'));
+                if (!Array.isArray(edges) || !edges.every(e => Array.isArray(e) && e.length === 2)) {
+                    throw new Error("Edges must be a list of pairs.");
+                }
+
+                const source = Number(sourceStr);
+                const destination = Number(destStr);
+                if (isNaN(source) || isNaN(destination)) throw new Error("Source/Destination must be numbers.");
+
+                executionTrace = generateTrace(n, edges, source, destination);
+                currentStep = 0;
+                render();
+            } catch (e) {
+                showError(e.message || "Invalid input format.");
+            }
+        }
+
+        function handleResize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            if (executionTrace.length > 0) {
+                draw();
+            }
+        }
+
+        // --- Initial Load & Event Listeners ---
+        function initialize() {
+            nInput.value = '3';
+            edgesInput.value = '[[0,1],[1,2],[2,0]]';
+            sourceInput.value = '0';
+            destInput.value = '2';
+            handleResize();
+            setupVisualizer();
+
+            visualizeBtn.addEventListener('click', setupVisualizer);
+            nextBtn.addEventListener('click', () => {
+                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+            });
+            prevBtn.addEventListener('click', () => {
+                if (currentStep > 0) { currentStep--; render(); }
+            });
+            window.addEventListener('resize', handleResize);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') nextBtn.click();
+                else if (e.key === 'ArrowLeft') prevBtn.click();
+            });
+        }
+        
+        window.setTimeout(initialize, 100);
+    });
+</script>
+
+</body>
+</html>
