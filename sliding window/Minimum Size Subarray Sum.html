@@ -1,11 +1,227 @@
-<!-- Minimum Size Subarray Sum -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <title>Minimum Size Subarray Sum</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Execution Visualizer (HTML/CSS Renderer) - Minimum Size Subarray Sum</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .font-fira { font-family: 'Fira Code', monospace; }
+        .btn-control { transition: background-color 0.2s ease, transform 0.2s ease; }
+        .btn-control:hover:not(:disabled) { transform: translateY(-2px); }
+        @media (max-width: 768px) { .max-w-7xl { max-width: 95%; } }
+        .code-line { padding: 2px 0; border-left: 5px solid transparent; transition: background-color 0.2s, transform 0.2s; }
+        .code-line.highlight { background-color: #374151; border-left-color: #3b82f6; }
+        .variable-name { color: #fb923c; }
+        .variable-value { color: #facc15; }
+        .return-value { color: #4ade80; font-weight: bold; }
+        .flash-bg { animation: flash 0.5s ease-out; }
+        @keyframes flash { 0% { background-color: rgba(29, 78, 216, 0.7); } 100% { background-color: transparent; } }
+    </style>
 </head>
-<body>
-    <h1>Minimum Size Subarray Sum</h1>
+<body class="bg-gray-900 text-gray-200 h-full flex flex-col">
+    <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
+        <header class="text-center mb-6 flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
+            <p class="text-gray-400 mt-2">Visualizing <code>minSubArrayLen</code> in Python (HTML/CSS Renderer)</p>
+        </header>
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                <label for="custom-input" class="font-medium text-white flex-shrink-0">Enter array (comma-separated):</label>
+                <input type="text" id="custom-input" placeholder="2,3,1,2,4,3" class="flex-grow bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                <label for="target-input" class="font-medium text-white flex-shrink-0">Target:</label>
+                <input type="number" id="target-input" placeholder="7" class="w-20 bg-gray-800 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-fira">
+                <button id="visualize-btn" class="btn-control bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg w-full sm:w-auto">
+                    Visualize
+                </button>
+            </div>
+            <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
+        </div>
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0 flex flex-col md:flex-row">
+            <div class="flex-1 p-4 overflow-y-auto border-b md:border-b-0 md:border-r border-gray-700">
+                <h2 class="text-xl font-bold text-white mb-4">Source Code</h2>
+                <pre id="code-display" class="font-fira text-gray-200 text-sm"></pre>
+            </div>
+            <div class="flex-1 p-4 overflow-y-auto">
+                <h2 class="text-xl font-bold text-white mb-4">Execution State</h2>
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white mb-2">Variables</h3>
+                    <div id="variables-display" class="font-fira text-sm"></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-2">Explanation</h3>
+                    <p id="explanation-display" class="text-gray-200 text-sm leading-relaxed"></p>
+                </div>
+                <div id="return-value-display" class="mt-6 text-lg"></div>
+            </div>
+        </main>
+        <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
+            <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="step-counter" class="text-lg font-medium text-gray-400 w-28 text-center tabular-nums">Step 0 / 0</span>
+            <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </footer>
+    </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const customInput = document.getElementById('custom-input');
+    const targetInput = document.getElementById('target-input');
+    const visualizeBtn = document.getElementById('visualize-btn');
+    const errorBox = document.getElementById('error-box');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const stepCounter = document.getElementById('step-counter');
+    const codeDisplay = document.getElementById('code-display');
+    const variablesDisplay = document.getElementById('variables-display');
+    const explanationDisplay = document.getElementById('explanation-display');
+    const returnValueDisplay = document.getElementById('return-value-display');
+    const sourceCode = [
+        'class Solution:',
+        '    def minSubArrayLen(self, target: int, nums: List[int]) -> int:',
+        '        l = 0',
+        '        s = 0',
+        '        res = float("inf")',
+        '        for r in range(len(nums)):',
+        '            s += nums[r]',
+        '            while s >= target:',
+        '                res = min(res, r - l + 1)',
+        '                s -= nums[l]',
+        '                l += 1',
+        '        return 0 if res == float("inf") else res',
+    ];
+    let executionTrace = [];
+    let currentStep = -1;
+    let lastVarsState = {};
+    function formatArr(arr) {
+        return `[${arr.join(', ')}]`;
+    }
+    function generateTrace(target, nums) {
+        const steps = [];
+        let l = 0, s = 0, res = Infinity, r;
+        const addStep = (line, msg, extra = {}) => {
+            steps.push({ line, vars: { target, nums: formatArr(nums), l, s, res, r }, msg, ...extra });
+        };
+        addStep(2, "Function 'minSubArrayLen' is called.");
+        l = 0;
+        addStep(3, "Initialize 'l' (left pointer) to 0.");
+        s = 0;
+        addStep(4, "Initialize 's' (current sum) to 0.");
+        res = Infinity;
+        addStep(5, "Initialize 'res' (result) to infinity.");
+        addStep(6, "Start iterating through the array with right pointer 'r'.");
+        for (r = 0; r < nums.length; r++) {
+            addStep(6, `Current index 'r' is ${r}, nums[r] is ${nums[r]}.`);
+            s += nums[r];
+            addStep(7, `Add nums[r] to s: s = ${s}.`);
+            while (s >= target) {
+                addStep(8, `While s >= target (${s} >= ${target}).`);
+                res = Math.min(res, r - l + 1);
+                addStep(9, `Update res: res = min(res, r - l + 1) = ${res}.`);
+                s -= nums[l];
+                addStep(10, `Subtract nums[l] from s: s = ${s}.`);
+                l += 1;
+                addStep(11, `Move left pointer 'l' to ${l}.`);
+            }
+        }
+        addStep(6, "Finished iterating through the array.");
+        addStep(12, `Return 0 if res == infinity else res.`, { returnValue: res === Infinity ? 0 : res });
+        return steps;
+    }
+    function renderCode() {
+        codeDisplay.innerHTML = '';
+        sourceCode.forEach((line, index) => {
+            const lineNum = index + 1;
+            const lineDiv = document.createElement('div');
+            lineDiv.className = `code-line px-4 py-1 ${lineNum + 1 === executionTrace[currentStep]?.line ? 'highlight' : ''}`;
+            lineDiv.innerHTML = `<span class="text-gray-500 mr-3">${lineNum.toString().padStart(2, ' ')}</span>${line.replace(/ /g, '&nbsp;')}`;
+            codeDisplay.appendChild(lineDiv);
+        });
+    }
+    function renderVariables() {
+        variablesDisplay.innerHTML = '';
+        const state = executionTrace[currentStep];
+        for (const [key, value] of Object.entries(state.vars)) {
+            if (value === undefined) continue;
+            const varDiv = document.createElement('div');
+            varDiv.className = 'flex justify-between items-center py-1';
+            const varNameSpan = document.createElement('span');
+            varNameSpan.className = 'variable-name';
+            varNameSpan.textContent = key;
+            varDiv.appendChild(varNameSpan);
+            const varValueSpan = document.createElement('span');
+            varValueSpan.className = 'variable-value';
+            varValueSpan.textContent = value;
+            varDiv.appendChild(varValueSpan);
+            variablesDisplay.appendChild(varDiv);
+            if (lastVarsState[key] !== undefined && JSON.stringify(lastVarsState[key]) !== JSON.stringify(value)) {
+                varDiv.classList.add('flash-bg');
+                setTimeout(() => varDiv.classList.remove('flash-bg'), 500);
+            }
+        }
+    }
+    function renderExplanation() {
+        explanationDisplay.textContent = executionTrace[currentStep]?.msg || '';
+    }
+    function renderReturnValue() {
+        returnValueDisplay.innerHTML = '';
+        const state = executionTrace[currentStep];
+        if (state?.returnValue !== undefined) {
+            const returnDiv = document.createElement('div');
+            returnDiv.className = 'return-value';
+            returnDiv.innerHTML = `Return Value: <span class="font-fira">${state.returnValue}</span>`;
+            returnValueDisplay.appendChild(returnDiv);
+        }
+    }
+    function render() {
+        if (currentStep < 0 || currentStep >= executionTrace.length) return;
+        renderCode();
+        renderVariables();
+        renderExplanation();
+        renderReturnValue();
+        lastVarsState = JSON.parse(JSON.stringify(executionTrace[currentStep].vars));
+        stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+        prevBtn.disabled = currentStep === 0;
+        nextBtn.disabled = currentStep === executionTrace.length - 1;
+    }
+    function showError(message) {
+        errorBox.textContent = message;
+        errorBox.style.opacity = '1';
+        setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+    }
+    function setupVisualizer() {
+        const inputStr = customInput.value.trim();
+        const targetVal = targetInput.value.trim();
+        if (!inputStr || !targetVal) {
+            showError("Both array and target are required.");
+            return;
+        }
+        const nums = inputStr.split(',').map(s => Number(s.trim()));
+        const target = Number(targetVal);
+        if (nums.some(isNaN) || isNaN(target)) {
+            showError("Invalid input. Please enter valid numbers.");
+            return;
+        }
+        executionTrace = generateTrace(target, nums);
+        currentStep = 0;
+        render();
+    }
+    function initialize() {
+        customInput.value = '2,3,1,2,4,3';
+        targetInput.value = '7';
+        setupVisualizer();
+        visualizeBtn.addEventListener('click', setupVisualizer);
+        nextBtn.addEventListener('click', () => {
+            if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+        });
+        prevBtn.addEventListener('click', () => {
+            if (currentStep > 0) { currentStep--; render(); }
+        });
+    }
+    window.setTimeout(initialize, 100);
+});
+</script>
 </body>
 </html>

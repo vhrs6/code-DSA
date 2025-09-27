@@ -3,29 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Execution Visualizer (Canvas Renderer)</title>
-    
-    <!-- Tailwind CSS CDN -->
+    <title>Code Execution Visualizer (HTML/CSS Renderer)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    
     <style>
-        /* Ensure canvas is responsive and doesn't have default margins */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #111827; /* bg-gray-900 */
+            background-color: #111827;
         }
         .font-fira {
             font-family: 'Fira Code', monospace;
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
         }
         .btn-control {
             transition: background-color 0.2s ease, transform 0.2s ease;
@@ -33,16 +22,125 @@
         .btn-control:hover:not(:disabled) {
             transform: translateY(-2px);
         }
+        @media (max-width: 768px) {
+            .max-w-7xl {
+                max-width: 95%;
+            }
+        }
+        .code-line {
+            padding: 2px 0;
+            border-left: 5px solid transparent;
+            transition: background-color 0.2s ease, border-left-color 0.2s ease;
+        }
+        .code-line.highlight {
+            background-color: #374151;
+            border-left-color: #3b82f6;
+        }
+        .variable-name {
+            color: #fb923c;
+        }
+        .variable-value {
+            color: #facc15;
+        }
+        .return-value {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        .flash-bg {
+            animation: flash 0.5s ease-out;
+        }
+        @keyframes flash {
+            0% { background-color: rgba(29, 78, 216, 0.7); }
+            100% { background-color: transparent; }
+        }
+        /* Linked List specific styles */
+        .linked-list-container {
+            display: flex;
+            align-items: center;
+            margin-top: 20px;
+            min-height: 100px; /* Ensure enough space for pointers */
+            position: relative;
+        }
+        .node-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-right: 20px;
+            position: relative;
+        }
+        .node {
+            background-color: #1f2937; /* gray-800 */
+            border: 1px solid #4b5563; /* gray-600 */
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: #e5e7eb; /* gray-200 */
+            font-family: 'Fira Code', monospace;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+        .arrow {
+            position: absolute;
+            height: 2px;
+            background-color: #6b7280; /* gray-500 */
+            z-index: 5;
+        }
+        .arrow-head {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 8px solid #6b7280; /* gray-500 */
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .pointer-label {
+            position: absolute;
+            font-weight: bold;
+            font-size: 0.875rem; /* text-sm */
+            z-index: 15;
+        }
+        .slow-pointer {
+            color: #ef4444; /* red-500 */
+            top: 100%;
+            margin-top: 5px;
+        }
+        .fast-pointer {
+            color: #10b981; /* green-500 */
+            bottom: 100%;
+            margin-bottom: 5px;
+        }
+        .cycle-arrow {
+            position: absolute;
+            border: 2px solid #6b7280;
+            border-radius: 50%;
+            z-index: 5;
+            transform: rotate(90deg);
+        }
+        .cycle-arrow-head {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 8px solid #6b7280;
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 h-full flex flex-col">
 
-    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
     <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
         <!-- Header -->
         <header class="text-center mb-6 flex-shrink-0">
             <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
-            <p class="text-gray-400 mt-2">Visualizing `hasCycle` in Python (Canvas Renderer)</p>
+            <p class="text-gray-400 mt-2">Visualizing `hasCycle` in Python (HTML/CSS Renderer)</p>
         </header>
 
         <!-- Input Section -->
@@ -63,9 +161,28 @@
              <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
         </div>
 
-        <!-- Canvas Container: This will now grow and shrink correctly -->
-        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
-            <canvas id="visualizer-canvas"></canvas>
+        <!-- Main Section -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0 flex flex-col md:flex-row">
+            <div class="flex-1 p-4 overflow-y-auto border-b md:border-b-0 md:border-r border-gray-700">
+                <h2 class="text-xl font-bold text-white mb-4">Source Code</h2>
+                <pre id="code-display" class="font-fira text-gray-200 text-sm"></pre>
+            </div>
+            <div class="flex-1 p-4 overflow-y-auto">
+                <h2 class="text-xl font-bold text-white mb-4">Execution State</h2>
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white mb-2">Linked List</h3>
+                    <div id="linked-list-display" class="flex flex-wrap items-center py-1"></div>
+                </div>
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white mb-2">Variables</h3>
+                    <div id="variables-display" class="font-fira text-sm"></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-2">Explanation</h3>
+                    <p id="explanation-display" class="text-gray-200 text-sm leading-relaxed"></p>
+                </div>
+                <div id="return-value-display" class="mt-6 text-lg"></div>
+            </div>
         </main>
 
         <!-- Controls -->
@@ -86,8 +203,11 @@
         const prevBtn = document.getElementById('prev-btn');
         const nextBtn = document.getElementById('next-btn');
         const stepCounter = document.getElementById('step-counter');
-        const canvas = document.getElementById('visualizer-canvas');
-        const ctx = canvas.getContext('2d');
+        const codeDisplay = document.getElementById('code-display');
+        const variablesDisplay = document.getElementById('variables-display');
+        const explanationDisplay = document.getElementById('explanation-display');
+        const returnValueDisplay = document.getElementById('return-value-display');
+        const linkedListDisplay = document.getElementById('linked-list-display');
 
         // --- Source Code ---
         const sourceCode = [
@@ -106,32 +226,7 @@
         // --- Global State ---
         let executionTrace = [];
         let currentStep = -1;
-        
-        // --- Canvas & Drawing Configuration ---
-        const config = {
-            padding: 30,
-            codeFontSize: 16,
-            uiFontSize: 15,
-            titleFontSize: 18,
-            lineHeight: 1.6,
-            codePanelWidthRatio: 0.55,
-            colors: {
-                bg: '#111827',
-                text: '#d1d5db',
-                title: '#ffffff',
-                highlightBg: '#374151',
-                highlightAccent: '#3b82f6',
-                varName: '#fb923c',
-                varValue: '#facc15',
-                returnValue: '#4ade80',
-                nodeBg: '#1f2937',
-                nodeBorder: '#4b5563',
-                nodeText: '#e5e7eb',
-                fastPointerStroke: '#10b981', // green-500
-                slowPointerStroke: '#ef4444', // red-500
-                arrow: '#6b7280',
-            }
-        };
+        let lastVarsState = {};
         
         const formatNodeVal = (nodes, id) => id === null ? 'None' : `${nodes.find(n => n.id === id).val}`;
 
@@ -179,12 +274,13 @@
             fastId = headId;
             addStep(3, `Initialize 'slow' and 'fast' pointers to the head of the list.`);
             
-            while (fastId !== null && nodes.find(n => n.id === fastId).next !== null) {
+            while (fastId !== null && nodes.find(n => n.id === fastId) && nodes.find(n => n.id === fastId).next !== null) {
                 addStep(5, `Check loop: 'fast' and 'fast.next' are not None. Condition is true.`);
                 
                 const fastNode = nodes.find(n => n.id === fastId);
-                const nextFastNode = nodes.find(n => n.id === fastNode.next);
-                fastId = nextFastNode ? nextFastNode.next : null;
+                const nextFastNodeId = fastNode.next;
+                const nextNextFastNodeId = nextFastNodeId !== null ? nodes.find(n => n.id === nextFastNodeId).next : null;
+                fastId = nextNextFastNodeId;
                 addStep(6, `Move 'fast' two steps. It now points to ${formatNodeVal(nodes, fastId)}.`);
                 
                 const slowNode = nodes.find(n => n.id === slowId);
@@ -204,216 +300,165 @@
             return steps;
         }
 
-        // --- Canvas Drawing Functions ---
-        function wrapText(text, x, y, maxWidth, lineHeight) {
-            const words = text.split(' ');
-            let line = '';
-            for (let n = 0; n < words.length; n++) {
-                const testLine = line + words[n] + ' ';
-                const metrics = ctx.measureText(testLine);
-                if (metrics.width > maxWidth && n > 0) {
-                    ctx.fillText(line, x, y);
-                    line = words[n] + ' ';
-                    y += lineHeight;
-                } else {
-                    line = testLine;
-                }
-            }
-            ctx.fillText(line, x, y);
+        // --- HTML/CSS Rendering Functions ---
+        function renderCode() {
+            codeDisplay.innerHTML = '';
+            sourceCode.forEach((line, index) => {
+                const lineNum = index + 1;
+                const lineDiv = document.createElement('div');
+                lineDiv.className = `code-line px-4 py-1 ${lineNum + 1 === executionTrace[currentStep].line ? 'highlight' : ''}`;
+                lineDiv.innerHTML = `<span class="text-gray-500 mr-3">${lineNum.toString().padStart(2, ' ')}</span>${line.replace(/ /g, '&nbsp;')}`;
+                codeDisplay.appendChild(lineDiv);
+            });
         }
 
-        function drawLinkedList(nodes, headId, slowId, fastId, x, y) {
-            if (headId === null) {
-                ctx.fillStyle = config.colors.text;
-                ctx.fillText("None", x, y);
+        function renderVariables() {
+            variablesDisplay.innerHTML = '';
+            const state = executionTrace[currentStep];
+            for (const [key, value] of Object.entries(state.vars)) {
+                if (value === undefined) continue;
+                const varDiv = document.createElement('div');
+                varDiv.className = 'flex justify-between items-center py-1';
+                const varNameSpan = document.createElement('span');
+                varNameSpan.className = 'variable-name';
+                varNameSpan.textContent = key;
+                varDiv.appendChild(varNameSpan);
+                const varValueSpan = document.createElement('span');
+                varValueSpan.className = 'variable-value';
+                varValueSpan.textContent = value;
+                varDiv.appendChild(varValueSpan);
+                variablesDisplay.appendChild(varDiv);
+                if (lastVarsState[key] !== undefined && JSON.stringify(lastVarsState[key]) !== JSON.stringify(value)) {
+                    varDiv.classList.add('flash-bg');
+                    setTimeout(() => varDiv.classList.remove('flash-bg'), 500);
+                }
+            }
+        }
+
+        function renderExplanation() {
+            explanationDisplay.textContent = executionTrace[currentStep].msg;
+        }
+
+        function renderReturnValue() {
+            returnValueDisplay.innerHTML = '';
+            const state = executionTrace[currentStep];
+            if (state.returnValue !== undefined) {
+                const returnDiv = document.createElement('div');
+                returnDiv.className = 'return-value';
+                returnDiv.innerHTML = `Return Value: <span class="font-fira">${state.returnValue}</span>`;
+                returnValueDisplay.appendChild(returnDiv);
+            }
+        }
+
+        function renderLinkedList() {
+            linkedListDisplay.innerHTML = '';
+            const state = executionTrace[currentStep];
+            if (state.headId === null) {
+                linkedListDisplay.textContent = 'None';
                 return;
             }
 
-            const nodeSize = 40;
-            const nodeSpacing = 60;
-            let currentX = x;
-            const nodePositions = {};
+            const nodeElements = {};
+            let currentNode = state.nodes.find(n => n.id === state.headId);
+            let prevNodeElement = null;
 
-            let currentNode = nodes.find(n => n.id === headId);
-            while(currentNode && nodePositions[currentNode.id] === undefined) {
-                nodePositions[currentNode.id] = { x: currentX, y };
-                
-                ctx.fillStyle = config.colors.nodeBg;
-                ctx.strokeStyle = config.colors.nodeBorder;
-                ctx.lineWidth = 1;
-                
-                ctx.beginPath();
-                ctx.roundRect(currentX, y, nodeSize, nodeSize, 8);
-                ctx.fill();
-                ctx.stroke();
+            while (currentNode) {
+                const nodeWrapper = document.createElement('div');
+                nodeWrapper.className = 'node-wrapper';
+                nodeWrapper.style.position = 'relative'; // For pointer labels
 
-                ctx.fillStyle = config.colors.nodeText;
-                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(currentNode.val, currentX + nodeSize / 2, y + nodeSize / 2);
-                
-                currentX += nodeSpacing;
-                currentNode = nodes.find(n => n.id === currentNode.next);
-            }
+                const nodeDiv = document.createElement('div');
+                nodeDiv.className = 'node';
+                nodeDiv.textContent = currentNode.val;
+                nodeWrapper.appendChild(nodeDiv);
+                nodeElements[currentNode.id] = nodeWrapper;
 
-            currentNode = nodes.find(n => n.id === headId);
-            const drawnLinks = {};
-            while(currentNode && drawnLinks[currentNode.id] === undefined) {
-                drawnLinks[currentNode.id] = true;
-                if (currentNode.next !== null) {
-                    const startPos = nodePositions[currentNode.id];
-                    const endPos = nodePositions[currentNode.next];
+                if (state.slowId === currentNode.id) {
+                    const slowPointer = document.createElement('span');
+                    slowPointer.className = 'pointer-label slow-pointer';
+                    slowPointer.textContent = 'slow';
+                    nodeWrapper.appendChild(slowPointer);
+                }
+                if (state.fastId === currentNode.id) {
+                    const fastPointer = document.createElement('span');
+                    fastPointer.className = 'pointer-label fast-pointer';
+                    fastPointer.textContent = 'fast';
+                    nodeWrapper.appendChild(fastPointer);
+                }
 
-                    ctx.strokeStyle = config.colors.arrow;
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
+                linkedListDisplay.appendChild(nodeWrapper);
+
+                if (prevNodeElement) {
+                    const arrowDiv = document.createElement('div');
+                    arrowDiv.className = 'arrow';
+                    arrowDiv.style.width = '20px'; // Adjust as needed
+                    arrowDiv.style.marginLeft = '-10px'; // Half of arrow width to center
+                    arrowDiv.style.marginRight = '-10px';
+                    arrowDiv.style.position = 'relative';
+                    arrowDiv.style.display = 'flex';
+                    arrowDiv.style.alignItems = 'center';
+                    arrowDiv.style.justifyContent = 'flex-end';
+
+                    const arrowHead = document.createElement('div');
+                    arrowHead.className = 'arrow-head';
+                    arrowDiv.appendChild(arrowHead);
+                    linkedListDisplay.insertBefore(arrowDiv, nodeWrapper);
+                }
+
+                if (currentNode.next === null) {
+                    const nullText = document.createElement('span');
+                    nullText.textContent = 'None';
+                    nullText.className = 'ml-4 text-gray-400';
+                    linkedListDisplay.appendChild(nullText);
+                    break;
+                }
+
+                // Handle cycle rendering with a simpler CSS arrow
+                if (currentNode.next !== null && nodeElements[currentNode.next]) {
+                    const targetNodeElement = nodeElements[currentNode.next];
+                    const sourceNodeRect = nodeDiv.getBoundingClientRect();
+                    const targetNodeRect = targetNodeElement.querySelector('.node').getBoundingClientRect();
+                    const containerRect = linkedListDisplay.getBoundingClientRect();
+
+                    const cycleArrowDiv = document.createElement('div');
+                    cycleArrowDiv.className = 'absolute bg-gray-500';
+                    cycleArrowDiv.style.height = '2px';
+                    cycleArrowDiv.style.zIndex = '5';
+
+                    // Position the arrow from the current node to the target node
+                    const startX = sourceNodeRect.right - containerRect.left;
+                    const startY = sourceNodeRect.top - containerRect.top + sourceNodeRect.height / 2;
+                    const endX = targetNodeRect.left - containerRect.left;
+                    const endY = targetNodeRect.top - containerRect.top + targetNodeRect.height / 2;
+
+                    // For a simple straight line arrow
+                    cycleArrowDiv.style.left = `${startX}px`;
+                    cycleArrowDiv.style.top = `${startY}px`;
+                    cycleArrowDiv.style.width = `${endX - startX}px`;
                     
-                    if (endPos) { // Normal forward link
-                        ctx.moveTo(startPos.x + nodeSize, y + nodeSize / 2);
-                        ctx.lineTo(endPos.x, y + nodeSize / 2);
-                        ctx.stroke();
-
-                        ctx.fillStyle = config.colors.arrow;
-                        ctx.beginPath();
-                        ctx.moveTo(endPos.x, y + nodeSize / 2);
-                        ctx.lineTo(endPos.x - 8, y + nodeSize / 2 - 5);
-                        ctx.lineTo(endPos.x - 8, y + nodeSize / 2 + 5);
-                        ctx.closePath();
-                        ctx.fill();
-                    } else { // Cycle link
-                        const cycleTargetPos = nodePositions[currentNode.next];
-                        ctx.moveTo(startPos.x + nodeSize / 2, y + nodeSize);
-                        ctx.bezierCurveTo(
-                            startPos.x + nodeSize / 2, y + nodeSize + 40,
-                            cycleTargetPos.x + nodeSize / 2, y + nodeSize + 40,
-                            cycleTargetPos.x + nodeSize / 2, y + nodeSize
-                        );
-                        ctx.stroke();
-                        // Arrowhead for cycle
-                        ctx.fillStyle = config.colors.arrow;
-                        ctx.beginPath();
-                        ctx.moveTo(cycleTargetPos.x + nodeSize / 2, y + nodeSize);
-                        ctx.lineTo(cycleTargetPos.x + nodeSize / 2 - 5, y + nodeSize + 8);
-                        ctx.lineTo(cycleTargetPos.x + nodeSize / 2 + 5, y + nodeSize + 8);
-                        ctx.closePath();
-                        ctx.fill();
-                    }
+                    // Add arrowhead
+                    const cycleArrowHead = document.createElement('div');
+                    cycleArrowHead.className = 'arrow-head';
+                    cycleArrowDiv.appendChild(cycleArrowHead);
+                    
+                    linkedListDisplay.appendChild(cycleArrowDiv);
+                    break; // Stop rendering if cycle detected and drawn
                 }
-                currentNode = nodes.find(n => n.id === currentNode.next);
-            }
-            
-            if (!nodes[nodes.length-1].next) {
-                ctx.fillStyle = config.colors.text;
-                ctx.textAlign = 'left';
-                ctx.fillText("None", currentX + 10, y + nodeSize / 2);
-            }
-
-            // Draw pointer labels
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.textAlign = 'center';
-            if (fastId !== null) {
-                ctx.fillStyle = config.colors.fastPointerStroke;
-                ctx.fillText("fast", nodePositions[fastId].x + nodeSize / 2, y - 20);
-            }
-            if (slowId !== null) {
-                ctx.fillStyle = config.colors.slowPointerStroke;
-                ctx.fillText("slow", nodePositions[slowId].x + nodeSize / 2, y + nodeSize + 20);
+                
+                prevNodeElement = nodeWrapper;
+                currentNode = state.nodes.find(n => n.id === currentNode.next);
             }
         }
 
-        function draw() {
-            if (currentStep < 0 || currentStep >= executionTrace.length) return;
-            
-            const state = executionTrace[currentStep];
-            const codeLineHeight = config.codeFontSize * config.lineHeight;
-            const uiLineHeight = config.uiFontSize * config.lineHeight;
-
-            ctx.fillStyle = config.colors.bg;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // --- Draw Code Panel (Left) ---
-            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
-            ctx.font = `bold ${config.titleFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Source Code", config.padding, config.padding);
-
-            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
-            sourceCode.forEach((line, index) => {
-                const y = config.padding + 50 + index * codeLineHeight;
-                if (index + 2 === state.line) {
-                    ctx.fillStyle = config.colors.highlightBg;
-                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
-                    ctx.fillStyle = config.colors.highlightAccent;
-                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
-                }
-                ctx.fillStyle = config.colors.text;
-                ctx.fillText(line, config.padding, y);
-            });
-
-            // --- Draw State Panel (Right) ---
-            const statePanelX = codePanelWidth + config.padding;
-            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
-            let currentY = config.padding;
-
-            ctx.font = `bold ${config.titleFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillText("Execution State", statePanelX, currentY);
-            currentY += 50;
-            
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Linked List", statePanelX, currentY);
-            currentY += uiLineHeight + 20;
-            drawLinkedList(state.nodes, state.headId, state.slowId, state.fastId, statePanelX, currentY);
-            currentY += 80;
-
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Variables", statePanelX, currentY);
-            currentY += uiLineHeight;
-
-            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
-            for (const [key, value] of Object.entries(state.vars)) {
-                 if (value === undefined) continue;
-                
-                ctx.fillStyle = config.colors.varName;
-                ctx.fillText(`${key}`, statePanelX, currentY);
-                
-                ctx.fillStyle = config.colors.varValue;
-                ctx.textAlign = "right";
-                ctx.fillText(value, statePanelX + statePanelWidth - 20, currentY);
-                ctx.textAlign = "left";
-                currentY += uiLineHeight;
-            }
-            currentY += config.padding;
-
-            if (state.returnValue !== undefined) {
-                ctx.font = `bold ${config.uiFontSize}px Inter`;
-                ctx.fillStyle = config.colors.title;
-                ctx.fillText("Return Value", statePanelX, currentY);
-                currentY += uiLineHeight;
-                
-                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
-                ctx.fillStyle = config.colors.returnValue;
-                ctx.fillText(state.returnValue, statePanelX, currentY);
-                currentY += uiLineHeight + config.padding;
-            }
-
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Explanation", statePanelX, currentY);
-            currentY += uiLineHeight;
-
-            ctx.font = `${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.text;
-            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
-        }
 
         function render() {
-            draw();
+            if (currentStep < 0 || currentStep >= executionTrace.length) return;
+            renderCode();
+            renderVariables();
+            renderExplanation();
+            renderReturnValue();
+            renderLinkedList(); // Render the linked list
+            lastVarsState = JSON.parse(JSON.stringify(executionTrace[currentStep].vars));
             stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
             prevBtn.disabled = currentStep === 0;
             nextBtn.disabled = currentStep === executionTrace.length - 1;
@@ -450,22 +495,10 @@
             }
         }
 
-        function handleResize() {
-            const dpr = window.devicePixelRatio || 1;
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            ctx.scale(dpr, dpr);
-            if (executionTrace.length > 0) {
-                draw();
-            }
-        }
-
         // --- Initial Load & Event Listeners ---
         function initialize() {
             listInput.value = '3,2,0,-4';
             posInput.value = '1';
-            handleResize();
             setupVisualizer();
 
             visualizeBtn.addEventListener('click', setupVisualizer);
@@ -475,7 +508,6 @@
             prevBtn.addEventListener('click', () => {
                 if (currentStep > 0) { currentStep--; render(); }
             });
-            window.addEventListener('resize', handleResize);
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowRight') nextBtn.click();
                 else if (e.key === 'ArrowLeft') prevBtn.click();
@@ -488,4 +520,3 @@
 
 </body>
 </html>
-

@@ -3,29 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Execution Visualizer (Canvas Renderer)</title>
-    
-    <!-- Tailwind CSS CDN -->
+    <title>Code Execution Visualizer (HTML/CSS Renderer) - Rotate Image</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    
     <style>
-        /* Ensure canvas is responsive and doesn't have default margins */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #111827; /* bg-gray-900 */
+            background-color: #111827;
         }
         .font-fira {
             font-family: 'Fira Code', monospace;
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
         }
         .btn-control {
             transition: background-color 0.2s ease, transform 0.2s ease;
@@ -33,18 +22,46 @@
         .btn-control:hover:not(:disabled) {
             transform: translateY(-2px);
         }
+        @media (max-width: 768px) {
+            .max-w-7xl {
+                max-width: 95%;
+            }
+        }
+        .code-line {
+            padding: 2px 0;
+            border-left: 5px solid transparent;
+            transition: background-color 0.2s ease, border-left-color 0.2s ease;
+        }
+        .code-line.highlight {
+            background-color: #374151;
+            border-left-color: #3b82f6;
+        }
+        .variable-name {
+            color: #fb923c;
+        }
+        .variable-value {
+            color: #facc15;
+        }
+        .return-value {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        .flash-bg {
+            animation: flash 0.5s ease-out;
+        }
+        @keyframes flash {
+            0% { background-color: rgba(29, 78, 216, 0.7); }
+            100% { background-color: transparent; }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 h-full flex flex-col">
-
-    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
     <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
         <!-- Header -->
         <header class="text-center mb-6 flex-shrink-0">
             <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
-            <p class="text-gray-400 mt-2">Visualizing `rotate` in Python (Canvas Renderer)</p>
+            <p class="text-gray-400 mt-2">Visualizing <code>rotate</code> in Python (HTML/CSS Renderer)</p>
         </header>
-
         <!-- Input Section -->
         <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
             <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -56,12 +73,25 @@
             </div>
              <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
         </div>
-
-        <!-- Canvas Container: This will now grow and shrink correctly -->
-        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
-            <canvas id="visualizer-canvas"></canvas>
+        <!-- Main Section -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0 flex flex-col md:flex-row">
+            <div class="flex-1 p-4 overflow-y-auto border-b md:border-b-0 md:border-r border-gray-700">
+                <h2 class="text-xl font-bold text-white mb-4">Source Code</h2>
+                <pre id="code-display" class="font-fira text-gray-200 text-sm"></pre>
+            </div>
+            <div class="flex-1 p-4 overflow-y-auto">
+                <h2 class="text-xl font-bold text-white mb-4">Execution State</h2>
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white mb-2">Variables</h3>
+                    <div id="variables-display" class="font-fira text-sm"></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-2">Explanation</h3>
+                    <p id="explanation-display" class="text-gray-200 text-sm leading-relaxed"></p>
+                </div>
+                <div id="return-value-display" class="mt-6 text-lg"></div>
+            </div>
         </main>
-
         <!-- Controls -->
         <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
             <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
@@ -69,285 +99,171 @@
             <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
         </footer>
     </div>
-
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- DOM Element References ---
-        const customInput = document.getElementById('custom-input');
-        const visualizeBtn = document.getElementById('visualize-btn');
-        const errorBox = document.getElementById('error-box');
-        const prevBtn = document.getElementById('prev-btn');
-        const nextBtn = document.getElementById('next-btn');
-        const stepCounter = document.getElementById('step-counter');
-        const canvas = document.getElementById('visualizer-canvas');
-        const ctx = canvas.getContext('2d');
-
-        // --- Source Code ---
-        const sourceCode = [
-            'class Solution:',
-            '    def rotate(self, matrix: List[List[int]]) -> None:',
-            '        n=len(matrix)',
-            '',
-            '        #transpose',
-            '        for i in range(n):',
-            '            for j in range(i+1,n):',
-            '                matrix[i][j],matrix[j][i]=matrix[j][i],matrix[i][j]',
-            '',
-            '        # reverse rows',
-            '        for row in matrix:',
-            '            row.reverse()',
+document.addEventListener('DOMContentLoaded', () => {
+    const customInput = document.getElementById('custom-input');
+    const visualizeBtn = document.getElementById('visualize-btn');
+    const errorBox = document.getElementById('error-box');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const stepCounter = document.getElementById('step-counter');
+    const codeDisplay = document.getElementById('code-display');
+    const variablesDisplay = document.getElementById('variables-display');
+    const explanationDisplay = document.getElementById('explanation-display');
+    const returnValueDisplay = document.getElementById('return-value-display');
+    const sourceCode = [
+        'class Solution:',
+        '    def rotate(self, matrix: List[List[int]]) -> None:',
+        '        n=len(matrix)',
+        '',
+        '        #transpose',
+        '        for i in range(n):',
+        '            for j in range(i+1,n):',
+        '                matrix[i][j],matrix[j][i]=matrix[j][i],matrix[i][j]',
+        '',
+        '        # reverse rows',
+        '        for row in matrix:',
+        '            row.reverse()',
         ];
-
-        // --- Global State ---
-        let executionTrace = [];
-        let currentStep = -1;
-        let lastVarsState = {};
-        
-        // --- Canvas & Drawing Configuration ---
-        const config = {
-            padding: 30,
-            codeFontSize: 16,
-            uiFontSize: 15,
-            titleFontSize: 18,
-            lineHeight: 1.6,
-            codePanelWidthRatio: 0.6,
-            colors: {
-                bg: '#111827',
-                text: '#d1d5db',
-                title: '#ffffff',
-                highlightBg: '#374151',
-                highlightAccent: '#3b82f6',
-                varName: '#fb923c',
-                varValue: '#facc15',
-                returnValue: '#4ade80',
-                flash: 'rgba(29, 78, 216, 0.7)',
-            }
+    let executionTrace = [];
+    let currentStep = -1;
+    let lastVarsState = {};
+    const formatMatrix = matrix => `[${matrix.map(row => `[${row.join(',')}]`).join(', ')}]`;
+    function generateTrace(matrix) {
+        const steps = [];
+        let n, i, j;
+        const addStep = (line, msg, extra = {}) => {
+            const matrixState = JSON.parse(JSON.stringify(matrix));
+            steps.push({ line, vars: { matrix: formatMatrix(matrixState), n, i, j }, msg, ...extra });
         };
-        
-        // Helper to format array for display
-        const formatMatrix = matrix => `[${matrix.map(row => `[${row.join(',')}]`).join(', ')}]`;
-
-        // --- Core Logic: Trace Generation for rotate ---
-        function generateTrace(matrix) {
-            const steps = [];
-            let n, i, j;
-
-            const addStep = (line, msg, extra = {}) => {
-                // Deep copy matrix for accurate state logging
-                const matrixState = JSON.parse(JSON.stringify(matrix));
-                steps.push({ line, vars: { matrix: formatMatrix(matrixState), n, i, j }, msg, ...extra });
-            };
-
-            addStep(2, `Function 'rotate' is called.`);
-            n = matrix.length;
-            addStep(3, `Initialize 'n' to the length of the matrix, which is ${n}.`);
-            
-            addStep(5, "Start transposing the matrix.");
-            for (let current_i = 0; current_i < n; current_i++) {
-                i = current_i;
-                addStep(6, `Outer loop for transpose, 'i' is ${i}.`);
-                for (let current_j = i + 1; current_j < n; current_j++) {
-                    j = current_j;
-                    addStep(7, `Inner loop for transpose, 'j' is ${j}.`);
-                    
-                    const val1 = matrix[i][j];
-                    const val2 = matrix[j][i];
-                    addStep(8, `Swapping matrix[${i}][${j}] (${val1}) with matrix[${j}][${i}] (${val2}).`);
-                    [matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]];
-                    addStep(8, `Matrix after swap.`);
-                }
-            }
-            i = undefined;
-            j = undefined;
-            addStep(6, "Finished transposing the matrix.");
-
-            addStep(10, "Start reversing each row of the transposed matrix.");
-            for (let current_i = 0; current_i < n; current_i++) {
-                i = current_i;
-                addStep(11, `Processing row ${i}.`);
-                matrix[i].reverse();
-                addStep(12, `Row ${i} has been reversed.`);
-            }
-            i = undefined;
-            addStep(11, "Finished reversing all rows.");
-            addStep(2, "Rotation complete. The matrix has been modified in-place.", { finalState: formatMatrix(matrix) });
-            
-            return steps;
-        }
-
-        // --- Canvas Drawing Functions ---
-        function wrapText(text, x, y, maxWidth, lineHeight) {
-            const words = text.split(' ');
-            let line = '';
-            for (let n = 0; n < words.length; n++) {
-                const testLine = line + words[n] + ' ';
-                const metrics = ctx.measureText(testLine);
-                if (metrics.width > maxWidth && n > 0) {
-                    ctx.fillText(line, x, y);
-                    line = words[n] + ' ';
-                    y += lineHeight;
-                } else {
-                    line = testLine;
-                }
-            }
-            ctx.fillText(line, x, y);
-        }
-
-        function draw() {
-            if (currentStep < 0 || currentStep >= executionTrace.length) return;
-            
-            const state = executionTrace[currentStep];
-            const codeLineHeight = config.codeFontSize * config.lineHeight;
-            const uiLineHeight = config.uiFontSize * config.lineHeight;
-
-            ctx.fillStyle = config.colors.bg;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // --- Draw Code Panel (Left) ---
-            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
-            ctx.font = `bold ${config.titleFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Source Code", config.padding, config.padding);
-
-            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
-            sourceCode.forEach((line, index) => {
-                const y = config.padding + 50 + index * codeLineHeight;
-                if (index + 2 === state.line) { // Offset by 2 for class/def
-                    ctx.fillStyle = config.colors.highlightBg;
-                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
-                    ctx.fillStyle = config.colors.highlightAccent;
-                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
-                }
-                ctx.fillStyle = config.colors.text;
-                ctx.fillText(line, config.padding, y);
-            });
-
-            // --- Draw State Panel (Right) ---
-            const statePanelX = codePanelWidth + config.padding;
-            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
-            let currentY = config.padding;
-
-            ctx.font = `bold ${config.titleFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Execution State", statePanelX, currentY);
-            currentY += 50;
-            
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Variables", statePanelX, currentY);
-            currentY += uiLineHeight;
-
-            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
-            for (const [key, value] of Object.entries(state.vars)) {
-                 if (value === undefined) continue;
-                
-                if (lastVarsState[key] !== undefined && JSON.stringify(lastVarsState[key]) !== JSON.stringify(value)) {
-                    ctx.fillStyle = config.colors.flash;
-                    ctx.fillRect(statePanelX - 10, currentY - uiLineHeight / 1.5, statePanelWidth, uiLineHeight);
-                }
-
-                ctx.fillStyle = config.colors.varName;
-                ctx.fillText(`${key}`, statePanelX, currentY);
-                
-                ctx.fillStyle = config.colors.varValue;
-                ctx.textAlign = "right";
-                ctx.fillText(value, statePanelX + statePanelWidth - 20, currentY);
-                ctx.textAlign = "left";
-                currentY += uiLineHeight;
-            }
-            currentY += config.padding;
-
-            if (state.finalState !== undefined) {
-                ctx.font = `bold ${config.uiFontSize}px Inter`;
-                ctx.fillStyle = config.colors.title;
-                ctx.fillText("Final Matrix State", statePanelX, currentY);
-                currentY += uiLineHeight;
-                
-                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
-                ctx.fillStyle = config.colors.returnValue;
-                ctx.fillText(state.finalState, statePanelX, currentY);
-                currentY += uiLineHeight + config.padding;
-            }
-
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Explanation", statePanelX, currentY);
-            currentY += uiLineHeight;
-
-            ctx.font = `${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.text;
-            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
-        }
-
-        function render() {
-            draw();
-            lastVarsState = JSON.parse(JSON.stringify(executionTrace[currentStep].vars));
-            
-            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
-            prevBtn.disabled = currentStep === 0;
-            nextBtn.disabled = currentStep === executionTrace.length - 1;
-        }
-        
-        function showError(message) {
-            errorBox.textContent = message;
-            errorBox.style.opacity = '1';
-            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
-        }
-
-        // --- Event Handlers & Setup ---
-        function setupVisualizer() {
-            const inputStr = customInput.value.trim();
-            if (!inputStr) {
-                showError("Input cannot be empty.");
-                return;
-            }
-            try {
-                const matrix = JSON.parse(inputStr.replace(/'/g, '"'));
-                if (!Array.isArray(matrix) || !matrix.every(Array.isArray) || matrix.length !== matrix[0].length) {
-                    throw new Error("Input must be a square matrix.");
-                }
-                executionTrace = generateTrace(matrix);
-                currentStep = 0;
-                render();
-            } catch (e) {
-                showError(e.message || "Invalid format. Use a format like [[1,2],[3,4]].");
+        addStep(2, `Function 'rotate' is called.`);
+        n = matrix.length;
+        addStep(3, `Initialize 'n' to the length of the matrix, which is ${n}.`);
+        addStep(5, "Start transposing the matrix.");
+        for (let current_i = 0; current_i < n; current_i++) {
+            i = current_i;
+            addStep(6, `Outer loop for transpose, 'i' is ${i}.`);
+            for (let current_j = i + 1; current_j < n; current_j++) {
+                j = current_j;
+                addStep(7, `Inner loop for transpose, 'j' is ${j}.`);
+                const val1 = matrix[i][j];
+                const val2 = matrix[j][i];
+                addStep(8, `Swapping matrix[${i}][${j}] (${val1}) with matrix[${j}][${i}] (${val2}).`);
+                [matrix[i][j], matrix[j][i]] = [matrix[j][i], matrix[i][j]];
+                addStep(8, `Matrix after swap.`);
             }
         }
-
-        function handleResize() {
-            const dpr = window.devicePixelRatio || 1;
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            ctx.scale(dpr, dpr);
-            if (executionTrace.length > 0) {
-                draw();
+        i = undefined;
+        j = undefined;
+        addStep(6, "Finished transposing the matrix.");
+        addStep(10, "Start reversing each row of the transposed matrix.");
+        for (let current_i = 0; current_i < n; current_i++) {
+            i = current_i;
+            addStep(11, `Processing row ${i}.`);
+            matrix[i].reverse();
+            addStep(12, `Row ${i} has been reversed.`);
+        }
+        i = undefined;
+        addStep(11, "Finished reversing all rows.");
+        addStep(2, "Rotation complete. The matrix has been modified in-place.", { finalState: formatMatrix(matrix) });
+        return steps;
+    }
+    function renderCode() {
+        codeDisplay.innerHTML = '';
+        sourceCode.forEach((line, index) => {
+            const lineNum = index + 1;
+            const lineDiv = document.createElement('div');
+            lineDiv.className = `code-line px-4 py-1 ${lineNum + 1 === executionTrace[currentStep].line ? 'highlight' : ''}`;
+            lineDiv.innerHTML = `<span class="text-gray-500 mr-3">${lineNum.toString().padStart(2, ' ')}</span>${line.replace(/ /g, '&nbsp;')}`;
+            codeDisplay.appendChild(lineDiv);
+        });
+    }
+    function renderVariables() {
+        variablesDisplay.innerHTML = '';
+        const state = executionTrace[currentStep];
+        for (const [key, value] of Object.entries(state.vars)) {
+            if (value === undefined) continue;
+            const varDiv = document.createElement('div');
+            varDiv.className = 'flex justify-between items-center py-1';
+            const varNameSpan = document.createElement('span');
+            varNameSpan.className = 'variable-name';
+            varNameSpan.textContent = key;
+            varDiv.appendChild(varNameSpan);
+            const varValueSpan = document.createElement('span');
+            varValueSpan.className = 'variable-value';
+            varValueSpan.textContent = value;
+            varDiv.appendChild(varValueSpan);
+            variablesDisplay.appendChild(varDiv);
+            if (lastVarsState[key] !== undefined && JSON.stringify(lastVarsState[key]) !== JSON.stringify(value)) {
+                varDiv.classList.add('flash-bg');
+                setTimeout(() => varDiv.classList.remove('flash-bg'), 500);
             }
         }
-
-        // --- Initial Load & Event Listeners ---
-        function initialize() {
-            customInput.value = '[[1,2,3],[4,5,6],[7,8,9]]';
-            handleResize();
-            setupVisualizer();
-
-            visualizeBtn.addEventListener('click', setupVisualizer);
-            nextBtn.addEventListener('click', () => {
-                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
-            });
-            prevBtn.addEventListener('click', () => {
-                if (currentStep > 0) { currentStep--; render(); }
-            });
-            window.addEventListener('resize', handleResize);
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'ArrowRight') nextBtn.click();
-                else if (e.key === 'ArrowLeft') prevBtn.click();
-            });
+    }
+    function renderExplanation() {
+        explanationDisplay.textContent = executionTrace[currentStep].msg;
+    }
+    function renderReturnValue() {
+        returnValueDisplay.innerHTML = '';
+        const state = executionTrace[currentStep];
+        if (state.finalState !== undefined) {
+            const returnDiv = document.createElement('div');
+            returnDiv.className = 'return-value';
+            returnDiv.innerHTML = `Final Matrix: <span class="font-fira">${state.finalState}</span>`;
+            returnValueDisplay.appendChild(returnDiv);
         }
-        
-        window.setTimeout(initialize, 100);
-    });
+    }
+    function render() {
+        if (currentStep < 0 || currentStep >= executionTrace.length) return;
+        renderCode();
+        renderVariables();
+        renderExplanation();
+        renderReturnValue();
+        lastVarsState = JSON.parse(JSON.stringify(executionTrace[currentStep].vars));
+        stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+        prevBtn.disabled = currentStep === 0;
+        nextBtn.disabled = currentStep === executionTrace.length - 1;
+    }
+    function showError(message) {
+        errorBox.textContent = message;
+        errorBox.style.opacity = '1';
+        setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+    }
+    function setupVisualizer() {
+        const inputStr = customInput.value.trim();
+        if (!inputStr) {
+            showError("Input cannot be empty.");
+            return;
+        }
+        try {
+            const matrix = JSON.parse(inputStr.replace(/'/g, '"'));
+            if (!Array.isArray(matrix) || !matrix.every(Array.isArray) || matrix.length !== matrix[0].length) {
+                throw new Error("Input must be a square matrix.");
+            }
+            executionTrace = generateTrace(matrix);
+            currentStep = 0;
+            render();
+        } catch (e) {
+            showError(e.message || "Invalid format. Use a format like [[1,2],[3,4]].");
+        }
+    }
+    function initialize() {
+        customInput.value = '[[1,2,3],[4,5,6],[7,8,9]]';
+        setupVisualizer();
+        visualizeBtn.addEventListener('click', setupVisualizer);
+        nextBtn.addEventListener('click', () => {
+            if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+        });
+        prevBtn.addEventListener('click', () => {
+            if (currentStep > 0) { currentStep--; render(); }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextBtn.click();
+            else if (e.key === 'ArrowLeft') prevBtn.click();
+        });
+    }
+    window.setTimeout(initialize, 100);
+});
 </script>
-
 </body>
 </html>
