@@ -3,29 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Execution Visualizer (Canvas Renderer)</title>
-    
-    <!-- Tailwind CSS CDN -->
+    <title>Code Execution Visualizer (HTML/CSS Renderer) - Roman to Integer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts: Inter for UI, Fira Code for Code -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-    
     <style>
-        /* Ensure canvas is responsive and doesn't have default margins */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #111827; /* bg-gray-900 */
+            background-color: #111827;
         }
         .font-fira {
             font-family: 'Fira Code', monospace;
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
         }
         .btn-control {
             transition: background-color 0.2s ease, transform 0.2s ease;
@@ -33,18 +22,46 @@
         .btn-control:hover:not(:disabled) {
             transform: translateY(-2px);
         }
+        @media (max-width: 768px) {
+            .max-w-7xl {
+                max-width: 95%;
+            }
+        }
+        .code-line {
+            padding: 2px 0;
+            border-left: 5px solid transparent;
+            transition: background-color 0.2s ease, border-left-color 0.2s ease;
+        }
+        .code-line.highlight {
+            background-color: #374151;
+            border-left-color: #3b82f6;
+        }
+        .variable-name {
+            color: #fb923c;
+        }
+        .variable-value {
+            color: #facc15;
+        }
+        .return-value {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        .flash-bg {
+            animation: flash 0.5s ease-out;
+        }
+        @keyframes flash {
+            0% { background-color: rgba(29, 78, 216, 0.7); }
+            100% { background-color: transparent; }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 h-screen flex flex-col">
-
-    <!-- This main div is now the primary flex container, ensuring everything fits in the screen height -->
     <div class="max-w-7xl mx-auto w-full flex flex-col flex-grow p-4 sm:p-6 lg:p-8 min-h-0">
         <!-- Header -->
         <header class="text-center mb-6 flex-shrink-0">
             <h1 class="text-3xl md:text-4xl font-bold text-white">Code Execution Visualizer</h1>
-            <p class="text-gray-400 mt-2">Visualizing `romanToInt` in Python (Canvas Renderer)</p>
+            <p class="text-gray-400 mt-2">Visualizing <code>romanToInt</code> in Python (HTML/CSS Renderer)</p>
         </header>
-
         <!-- Input Section -->
         <div class="bg-gray-900 rounded-lg p-4 mb-6 shadow-lg border border-gray-700 flex-shrink-0">
             <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -56,12 +73,25 @@
             </div>
              <div id="error-box" class="text-red-400 text-center mt-3 h-5 transition-opacity duration-300 opacity-0"></div>
         </div>
-
-        <!-- Canvas Container: This will now grow and shrink correctly -->
-        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0">
-            <canvas id="visualizer-canvas"></canvas>
+        <!-- Main Section -->
+        <main class="flex-grow bg-gray-900 rounded-lg shadow-2xl border border-gray-700 overflow-hidden min-h-0 flex flex-col md:flex-row">
+            <div class="flex-1 p-4 overflow-y-auto border-b md:border-b-0 md:border-r border-gray-700">
+                <h2 class="text-xl font-bold text-white mb-4">Source Code</h2>
+                <pre id="code-display" class="font-fira text-gray-200 text-sm"></pre>
+            </div>
+            <div class="flex-1 p-4 overflow-y-auto">
+                <h2 class="text-xl font-bold text-white mb-4">Execution State</h2>
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white mb-2">Variables</h3>
+                    <div id="variables-display" class="font-fira text-sm"></div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-2">Explanation</h3>
+                    <p id="explanation-display" class="text-gray-200 text-sm leading-relaxed"></p>
+                </div>
+                <div id="return-value-display" class="mt-6 text-lg"></div>
+            </div>
         </main>
-
         <!-- Controls -->
         <footer class="mt-8 flex items-center justify-center gap-4 flex-shrink-0">
             <button id="prev-btn" class="btn-control bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
@@ -69,293 +99,179 @@
             <button id="next-btn" class="btn-control bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
         </footer>
     </div>
-
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- DOM Element References ---
-        const customInput = document.getElementById('custom-input');
-        const visualizeBtn = document.getElementById('visualize-btn');
-        const errorBox = document.getElementById('error-box');
-        const prevBtn = document.getElementById('prev-btn');
-        const nextBtn = document.getElementById('next-btn');
-        const stepCounter = document.getElementById('step-counter');
-        const canvas = document.getElementById('visualizer-canvas');
-        const ctx = canvas.getContext('2d');
-
-        // --- Source Code ---
-        const sourceCode = [
-            'class Solution:',
-            '    def romanToInt(self, s: str) -> int:',
-            '        summ = 0',
-            '        n = len(s)',
-            '        r = {',
-            "            'I': 1, 'V': 5, 'X': 10, 'L': 50,",
-            "            'C': 100, 'D': 500, 'M': 1000",
-            '        }',
-            '        i = 0',
-            '        while i < n:',
-            '            if i < n - 1 and r[s[i]] < r[s[i + 1]]:',
-            '                summ += r[s[i + 1]] - r[s[i]]',
-            '                i += 2',
-            '            else:',
-            '                summ += r[s[i]]',
-            '                i += 1',
-            '        return summ',
-        ];
-
-        // --- Global State ---
-        let executionTrace = [];
-        let currentStep = -1;
-        let lastVarsState = {};
-        
-        // --- Canvas & Drawing Configuration (Updated Theme) ---
-        const config = {
-            padding: 30,
-            codeFontSize: 16,
-            uiFontSize: 15,
-            titleFontSize: 18,
-            lineHeight: 1.6,
-            codePanelWidthRatio: 0.6,
-            colors: {
-                bg: '#111827', // gray-900
-                text: '#d1d5db', // gray-300
-                title: '#ffffff',
-                highlightBg: '#374151', // gray-700
-                highlightAccent: '#3b82f6', // blue-500
-                varName: '#fb923c', // orange-400
-                varValue: '#facc15', // yellow-400
-                returnValue: '#4ade80', // green-400
-                flash: 'rgba(29, 78, 216, 0.7)', // blue-700 with opacity
-            }
+document.addEventListener('DOMContentLoaded', () => {
+    const customInput = document.getElementById('custom-input');
+    const visualizeBtn = document.getElementById('visualize-btn');
+    const errorBox = document.getElementById('error-box');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const stepCounter = document.getElementById('step-counter');
+    const codeDisplay = document.getElementById('code-display');
+    const variablesDisplay = document.getElementById('variables-display');
+    const explanationDisplay = document.getElementById('explanation-display');
+    const returnValueDisplay = document.getElementById('return-value-display');
+    const sourceCode = [
+        'class Solution:',
+        '    def romanToInt(self, s: str) -> int:',
+        '        summ = 0',
+        '        n = len(s)',
+        '        r = {',
+        "            'I': 1, 'V': 5, 'X': 10, 'L': 50,",
+        "            'C': 100, 'D': 500, 'M': 1000",
+        '        }',
+        '        i = 0',
+        '        while i < n:',
+        '            if i < n - 1 and r[s[i]] < r[s[i + 1]]:',
+        '                summ += r[s[i + 1]] - r[s[i]]',
+        '                i += 2',
+        '            else:',
+        '                summ += r[s[i]]',
+        '                i += 1',
+        '        return summ',
+    ];
+    let executionTrace = [];
+    let currentStep = -1;
+    let lastVarsState = {};
+    function generateTrace(s) {
+        const steps = [];
+        let summ, n, i;
+        const r = { 'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 };
+        const addStep = (line, msg, extra = {}) => {
+            steps.push({ line, vars: { s, summ, n, i }, msg, ...extra });
         };
-
-        // --- Core Logic: Trace Generation for romanToInt ---
-        function generateTrace(s) {
-            const steps = [];
-            let summ, n, i;
-            const r = { 'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 };
-            
-            const addStep = (line, msg, extra = {}) => {
-                steps.push({ line, vars: { s, summ, n, i }, msg, ...extra });
-            };
-            
-            addStep(2, `Function 'romanToInt' is called with s = "${s}".`);
-            summ = 0;
-            addStep(3, "Initialize `summ` to 0. This will accumulate the total integer value.");
-            n = s.length;
-            addStep(4, `Initialize 'n' to the length of the string s, which is ${n}.`);
-            addStep(5, "The map `r` is defined, linking Roman numerals to their integer values.");
-            i = 0;
-            addStep(9, `Initialize loop counter 'i' to 0.`);
-
-            while (i < n) {
-                addStep(10, `Check loop condition: i < n (${i} < ${n}). Condition is ${i < n}.`);
-                if (!(i < n)) break;
-
-                const isSubtractiveCase = i < n - 1 && r[s[i]] < r[s[i + 1]];
-                let char1 = s[i];
-                let char2 = i < n - 1 ? s[i+1] : 'null';
-                let val1 = r[char1];
-                let val2 = i < n - 1 ? r[char2] : 'null';
-                addStep(11, `Check for subtractive pair: i < n-1 (${i < n-1}) AND r['${char1}'] < r['${char2}'] (${val1} < ${val2}). Condition is ${isSubtractiveCase}.`);
-
-                if (isSubtractiveCase) {
-                    const diff = r[s[i + 1]] - r[s[i]];
-                    summ += diff;
-                    addStep(12, `Subtractive pair found ('${s[i]}${s[i+1]}'). Add ${r[s[i+1]]} - ${r[s[i]]} = ${diff} to summ. New summ is ${summ}.`);
-                    i += 2;
-                    addStep(13, `Increment 'i' by 2 to skip both characters. New 'i' is ${i}.`);
-                } else {
-                    summ += r[s[i]];
-                    addStep(15, `Additive case. Add value of '${s[i]}' (${r[s[i]]}) to summ. New summ is ${summ}.`);
-                    i += 1;
-                    addStep(16, `Increment 'i' by 1. New 'i' is ${i}.`);
-                }
-            }
-            addStep(10, `Loop condition false (i=${i}, n=${n}). Exiting loop.`);
-            addStep(17, `Return the final accumulated value of 'summ'.`, { returnValue: summ });
-            
-            return steps;
-        }
-
-        // --- Canvas Drawing Functions ---
-        function wrapText(text, x, y, maxWidth, lineHeight) {
-            const words = text.split(' ');
-            let line = '';
-            for (let n = 0; n < words.length; n++) {
-                const testLine = line + words[n] + ' ';
-                const metrics = ctx.measureText(testLine);
-                if (metrics.width > maxWidth && n > 0) {
-                    ctx.fillText(line, x, y);
-                    line = words[n] + ' ';
-                    y += lineHeight;
-                } else {
-                    line = testLine;
-                }
-            }
-            ctx.fillText(line, x, y);
-        }
-
-        function draw() {
-            if (currentStep < 0 || currentStep >= executionTrace.length) return;
-            
-            const state = executionTrace[currentStep];
-            const codeLineHeight = config.codeFontSize * config.lineHeight;
-            const uiLineHeight = config.uiFontSize * config.lineHeight;
-
-            ctx.fillStyle = config.colors.bg;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // --- Draw Code Panel (Left) ---
-            const codePanelWidth = canvas.width * config.codePanelWidthRatio;
-            ctx.font = `bold ${config.titleFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Source Code", config.padding, config.padding);
-
-            ctx.font = `${config.codeFontSize}px 'Fira Code'`;
-            sourceCode.forEach((line, index) => {
-                const y = config.padding + 50 + index * codeLineHeight;
-                if (index + 1 === state.line) {
-                    ctx.fillStyle = config.colors.highlightBg;
-                    ctx.fillRect(config.padding - 15, y - codeLineHeight / 1.5, codePanelWidth - config.padding, codeLineHeight);
-                    ctx.fillStyle = config.colors.highlightAccent;
-                    ctx.fillRect(config.padding - 20, y - codeLineHeight / 1.5, 5, codeLineHeight);
-                }
-                ctx.fillStyle = config.colors.text;
-                ctx.fillText(line, config.padding, y);
-            });
-
-            // --- Draw State Panel (Right) ---
-            const statePanelX = codePanelWidth + config.padding;
-            const statePanelWidth = canvas.width - codePanelWidth - config.padding * 2;
-            let currentY = config.padding;
-
-            // Draw Title
-            ctx.font = `bold ${config.titleFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Execution State", statePanelX, currentY);
-            currentY += 50;
-            
-            // Draw Variables
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Variables", statePanelX, currentY);
-            currentY += uiLineHeight;
-
-            ctx.font = `${config.uiFontSize}px 'Fira Code'`;
-            for (const [key, value] of Object.entries(state.vars)) {
-                 if (value === undefined) continue;
-                
-                if (lastVarsState[key] !== undefined && JSON.stringify(lastVarsState[key]) !== JSON.stringify(value)) {
-                    ctx.fillStyle = config.colors.flash;
-                    ctx.fillRect(statePanelX - 10, currentY - uiLineHeight / 1.5, statePanelWidth, uiLineHeight);
-                }
-
-                ctx.fillStyle = config.colors.varName;
-                ctx.fillText(`${key}`, statePanelX, currentY);
-                
-                const formattedValue = typeof value === 'string' ? `"${value}"` : value;
-                ctx.fillStyle = config.colors.varValue;
-                ctx.textAlign = "right";
-                ctx.fillText(formattedValue, statePanelX + statePanelWidth - 20, currentY);
-                ctx.textAlign = "left";
-
-                currentY += uiLineHeight;
-            }
-            
-            currentY += config.padding;
-
-            // Draw Return Value if it exists
-            if (state.returnValue !== undefined) {
-                ctx.font = `bold ${config.uiFontSize}px Inter`;
-                ctx.fillStyle = config.colors.title;
-                ctx.fillText("Return Value", statePanelX, currentY);
-                currentY += uiLineHeight;
-                
-                ctx.font = `bold ${config.uiFontSize}px 'Fira Code'`;
-                ctx.fillStyle = config.colors.returnValue;
-                ctx.fillText(state.returnValue, statePanelX, currentY);
-                currentY += uiLineHeight + config.padding;
-            }
-
-            // Draw Explanation
-            ctx.font = `bold ${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.title;
-            ctx.fillText("Explanation", statePanelX, currentY);
-            currentY += uiLineHeight;
-
-            ctx.font = `${config.uiFontSize}px Inter`;
-            ctx.fillStyle = config.colors.text;
-            wrapText(state.msg, statePanelX, currentY, statePanelWidth - 20, uiLineHeight);
-        }
-
-        function render() {
-            draw();
-            lastVarsState = JSON.parse(JSON.stringify(executionTrace[currentStep].vars));
-            
-            stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
-            prevBtn.disabled = currentStep === 0;
-            nextBtn.disabled = currentStep === executionTrace.length - 1;
-        }
-        
-        function showError(message) {
-            errorBox.textContent = message;
-            errorBox.style.opacity = '1';
-            setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
-        }
-
-        // --- Event Handlers & Setup ---
-        function setupVisualizer() {
-            const inputStr = customInput.value.trim().toUpperCase();
-            const romanRegex = /^[IVXLCDM]+$/;
-            if (!inputStr) {
-                showError('Input cannot be empty.');
-                return;
-            }
-            if (!romanRegex.test(inputStr)) {
-                showError('Invalid Roman numeral characters. Use I, V, X, L, C, D, M.');
-                return;
-            }
-
-            executionTrace = generateTrace(inputStr);
-            currentStep = 0;
-            render();
-        }
-
-        function handleResize() {
-            const dpr = window.devicePixelRatio || 1;
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            ctx.scale(dpr, dpr);
-            if (executionTrace.length > 0) {
-                draw();
+        addStep(2, `Function 'romanToInt' is called with s = "${s}".`);
+        summ = 0;
+        addStep(3, "Initialize `summ` to 0. This will accumulate the total integer value.");
+        n = s.length;
+        addStep(4, `Initialize 'n' to the length of the string s, which is ${n}.`);
+        addStep(5, "The map `r` is defined, linking Roman numerals to their integer values.");
+        i = 0;
+        addStep(9, `Initialize loop counter 'i' to 0.`);
+        while (i < n) {
+            addStep(10, `Check loop condition: i < n (${i} < ${n}). Condition is ${i < n}.`);
+            if (!(i < n)) break;
+            const isSubtractiveCase = i < n - 1 && r[s[i]] < r[s[i + 1]];
+            let char1 = s[i];
+            let char2 = i < n - 1 ? s[i+1] : 'null';
+            let val1 = r[char1];
+            let val2 = i < n - 1 ? r[char2] : 'null';
+            addStep(11, `Check for subtractive pair: i < n-1 (${i < n-1}) AND r['${char1}'] < r['${char2}'] (${val1} < ${val2}). Condition is ${isSubtractiveCase}.`);
+            if (isSubtractiveCase) {
+                const diff = r[s[i + 1]] - r[s[i]];
+                summ += diff;
+                addStep(12, `Subtractive pair found ('${s[i]}${s[i+1]}'). Add ${r[s[i+1]]} - ${r[s[i]]} = ${diff} to summ. New summ is ${summ}.`);
+                i += 2;
+                addStep(13, `Increment 'i' by 2 to skip both characters. New 'i' is ${i}.`);
+            } else {
+                summ += r[s[i]];
+                addStep(15, `Additive case. Add value of '${s[i]}' (${r[s[i]]}) to summ. New summ is ${summ}.`);
+                i += 1;
+                addStep(16, `Increment 'i' by 1. New 'i' is ${i}.`);
             }
         }
-
-        // --- Initial Load & Event Listeners ---
-        function initialize() {
-            customInput.value = 'MCMXCIV';
-            handleResize();
-            setupVisualizer();
-
-            visualizeBtn.addEventListener('click', setupVisualizer);
-            nextBtn.addEventListener('click', () => {
-                if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
-            });
-            prevBtn.addEventListener('click', () => {
-                if (currentStep > 0) { currentStep--; render(); }
-            });
-            window.addEventListener('resize', handleResize);
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'ArrowRight') nextBtn.click();
-                else if (e.key === 'ArrowLeft') prevBtn.click();
-            });
+        addStep(10, `Loop condition false (i=${i}, n=${n}). Exiting loop.`);
+        addStep(17, `Return the final accumulated value of 'summ'.`, { returnValue: summ });
+        return steps;
+    }
+    function renderCode() {
+        codeDisplay.innerHTML = '';
+        sourceCode.forEach((line, index) => {
+            const lineNum = index + 1;
+            const lineDiv = document.createElement('div');
+            lineDiv.className = `code-line px-4 py-1 ${lineNum + 1 === executionTrace[currentStep].line ? 'highlight' : ''}`;
+            lineDiv.innerHTML = `<span class="text-gray-500 mr-3">${lineNum.toString().padStart(2, ' ')}</span>${line.replace(/ /g, '&nbsp;')}`;
+            codeDisplay.appendChild(lineDiv);
+        });
+    }
+    function renderVariables() {
+        variablesDisplay.innerHTML = '';
+        const state = executionTrace[currentStep];
+        for (const [key, value] of Object.entries(state.vars)) {
+            if (value === undefined) continue;
+            const varDiv = document.createElement('div');
+            varDiv.className = 'flex justify-between items-center py-1';
+            const varNameSpan = document.createElement('span');
+            varNameSpan.className = 'variable-name';
+            varNameSpan.textContent = key;
+            varDiv.appendChild(varNameSpan);
+            const varValueSpan = document.createElement('span');
+            varValueSpan.className = 'variable-value';
+            varValueSpan.textContent = value;
+            varDiv.appendChild(varValueSpan);
+            variablesDisplay.appendChild(varDiv);
+            if (lastVarsState[key] !== undefined && JSON.stringify(lastVarsState[key]) !== JSON.stringify(value)) {
+                varDiv.classList.add('flash-bg');
+                setTimeout(() => varDiv.classList.remove('flash-bg'), 500);
+            }
         }
-        
-        window.setTimeout(initialize, 100);
-    });
+    }
+    function renderExplanation() {
+        explanationDisplay.textContent = executionTrace[currentStep].msg;
+    }
+    function renderReturnValue() {
+        returnValueDisplay.innerHTML = '';
+        const state = executionTrace[currentStep];
+        if (state.returnValue !== undefined) {
+            const returnDiv = document.createElement('div');
+            returnDiv.className = 'return-value';
+            returnDiv.innerHTML = `Return Value: <span class="font-fira">${state.returnValue}</span>`;
+            returnValueDisplay.appendChild(returnDiv);
+        }
+    }
+    function render() {
+        if (currentStep < 0 || currentStep >= executionTrace.length) return;
+        renderCode();
+        renderVariables();
+        renderExplanation();
+        renderReturnValue();
+        lastVarsState = JSON.parse(JSON.stringify(executionTrace[currentStep].vars));
+        stepCounter.textContent = `Step ${currentStep + 1} / ${executionTrace.length}`;
+        prevBtn.disabled = currentStep === 0;
+        nextBtn.disabled = currentStep === executionTrace.length - 1;
+    }
+    function showError(message) {
+        errorBox.textContent = message;
+        errorBox.style.opacity = '1';
+        setTimeout(() => { errorBox.style.opacity = '0'; }, 3000);
+    }
+
+    // --- Event Handlers & Setup ---
+    function setupVisualizer() {
+        const inputStr = customInput.value.trim().toUpperCase();
+        const romanRegex = /^[IVXLCDM]+$/;
+        if (!inputStr) {
+            showError('Input cannot be empty.');
+            return;
+        }
+        if (!romanRegex.test(inputStr)) {
+            showError('Invalid Roman numeral characters. Use I, V, X, L, C, D, M.');
+            return;
+        }
+
+        executionTrace = generateTrace(inputStr);
+        currentStep = 0;
+        render();
+    }
+
+    function initialize() {
+        customInput.value = 'MCMXCIV';
+        setupVisualizer();
+        visualizeBtn.addEventListener('click', setupVisualizer);
+        nextBtn.addEventListener('click', () => {
+            if (currentStep < executionTrace.length - 1) { currentStep++; render(); }
+        });
+        prevBtn.addEventListener('click', () => {
+            if (currentStep > 0) { currentStep--; render(); }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextBtn.click();
+            else if (e.key === 'ArrowLeft') prevBtn.click();
+        });
+    }
+    
+    window.setTimeout(initialize, 100);
+});
 </script>
-
 </body>
 </html>

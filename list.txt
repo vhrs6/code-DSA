@@ -1,0 +1,51 @@
+Files containing 'canvas':
+Linked List/RMDuplicates from Sorted List.html
+Linked List/Reverse Linked List.html
+Linked List/Remove Nth Node From End of List.html
+Linked List/Linked List Cycle.html
+hashmaps/twoSum.html
+hashmaps/ransomNote.html
+BinarySearch/Search a 2D Matrix.html
+
+Files not containing 'canvas':
+index.html
+2 Pointers/palindrome.html
+2 Pointers/reverseastring.html
+2 Pointers/squaresofsortedarray.html
+2 Pointers/twoSum-sorted.html
+arrays and strings/buysellstocks.html
+arrays and strings/findClosest.html
+arrays and strings/isSubsequence.html
+arrays and strings/longestcommonprefix.html
+arrays and strings/Merge Intervals.html
+arrays and strings/merge_string.html
+arrays and strings/Product of Array Except Self.html
+arrays and strings/roman-to-int.html
+arrays and strings/Rotate Image.html
+arrays and strings/Spiral Matrix.html
+arrays and strings/summaryRanges.html
+BinarySearch/Binary Search.html
+BinarySearch/Find Minimum in Rotated Sorted Array.html
+BinarySearch/First Bad Version.html
+BinarySearch/Search Insert Position.html
+BinarySearch/Valid Perfect Square.html
+Graph/Find if Path Exists in Graph BFS (q).html
+Graph/Find if Path Exists in Graph DFS(stack).html
+Graph/Number of Islands.html
+hashmaps/groupanagrams.html
+hashmaps/jewelsandstones.html
+hashmaps/longestconsecutiveseq.html
+hashmaps/majorityElement.html
+hashmaps/maxnumberofballoons.html
+Linked List/Copy List with Random Pointer.html
+Linked List/Merge Two Sorted Lists.html
+Linked List/Middle of the Linked List.html
+sliding window/Longest Substring Without Repeating Characters.html
+sliding window/Max Consecutive Ones III.html
+sliding window/Maximum Average Subarray I.html
+sliding window/Minimum Size Subarray Sum.html
+Stack/baseball game.html
+Stack/DailyTemperature.html
+Stack/Min Stack.html
+Stack/ReversePolishNotation.html
+Stack/Valid Parentheses.html
